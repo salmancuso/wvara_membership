@@ -99,11 +99,6 @@ All initial passwords are set to the user's call sign and must be changed on fir
 
 **Administrator Accounts:**
 - Call Sign: `W6SAL` | Password: `W6SAL`
-- Call Sign: `KK6IK` | Password: `KK6IK`
-- Call Sign: `W6HS` | Password: `W6HS`
-
-**Regular Member Account:**
-- Call Sign: `KQ6OT` | Password: `KQ6OT`
 
 ## Importing Existing Members
 
@@ -238,7 +233,7 @@ For questions or issues with this application:
 
 ## License
 
-This software is provided as-is for use by WVARA and its members.
+MIT License
 
 ## Development Notes
 
@@ -306,5 +301,3 @@ Potential features for future development:
 
 ---
 
-**West Valley Amateur Radio Association (WVARA)**  
-*Promoting Amateur Radio in the West Valley since 1968*
