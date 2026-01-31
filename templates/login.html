@@ -1,0 +1,215 @@
+{% extends "base.html" %}
+
+{% block title %}Login - WVARA Membership{% endblock %}
+
+{% block content %}
+<!-- Cookie Consent Banner -->
+<div id="cookie-banner" class="alert alert-info alert-dismissible fade show" 
+     style="position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); 
+            max-width: 600px; z-index: 9999; box-shadow: 0 4px 6px rgba(0,0,0,0.1); 
+            display: none;">
+    <div class="d-flex align-items-start">
+        <div class="me-2">
+            <i class="bi bi-cookie" style="font-size: 1.5rem;"></i>
+        </div>
+        <div class="flex-grow-1">
+            <strong>Cookie Notice</strong>
+            <p class="mb-2 small">
+                This site uses cookies for authentication and session management. 
+                By logging in, you consent to our use of cookies.
+            </p>
+            <div class="d-flex gap-2">
+                <button type="button" class="btn btn-sm btn-primary" onclick="acceptCookies()">
+                    <i class="bi bi-check-circle"></i> Accept
+                </button>
+                <a href="#" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#privacyModal">
+                    <i class="bi bi-info-circle"></i> Learn More
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Privacy Policy Modal -->
+<div class="modal fade" id="privacyModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-shield-check"></i> Privacy & Cookie Policy</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <h6>What Cookies We Use</h6>
+                <p>This website uses essential cookies only:</p>
+                <ul>
+                    <li><strong>Session Cookies:</strong> Required for login and authentication</li>
+                    <li><strong>Security Cookies:</strong> CAPTCHA verification and fraud prevention</li>
+                </ul>
+                
+                <h6 class="mt-3">Why We Use Cookies</h6>
+                <p>Cookies are necessary to:</p>
+                <ul>
+                    <li>Keep you logged in during your session</li>
+                    <li>Protect against unauthorized access</li>
+                    <li>Remember your authentication state</li>
+                </ul>
+                
+                <h6 class="mt-3">Data We Collect</h6>
+                <p>We only collect:</p>
+                <ul>
+                    <li>Member information you provide (name, call sign, email, address)</li>
+                    <li>Login activity and timestamps</li>
+                    <li>Administrative actions for audit purposes</li>
+                </ul>
+                
+                <h6 class="mt-3">Data Security</h6>
+                <p>Your data is protected through:</p>
+                <ul>
+                    <li>Encrypted password storage (PBKDF2-SHA256)</li>
+                    <li>Secure session management</li>
+                    <li>No third-party tracking or analytics</li>
+                    <li>Local database storage only</li>
+                </ul>
+                
+                <h6 class="mt-3">Your Rights</h6>
+                <p>As a club member, you can:</p>
+                <ul>
+                    <li>Access your personal information anytime</li>
+                    <li>Request changes to your data</li>
+                    <li>Request account deletion</li>
+                </ul>
+                
+                <p class="text-muted small mt-3">
+                    <strong>Contact:</strong> For privacy-related questions, contact a club administrator.
+                </p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" onclick="acceptCookies()" data-bs-dismiss="modal">Accept Cookies</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row justify-content-center">
+    <div class="col-md-6 col-lg-4">
+        <div class="card shadow">
+            <div class="card-header text-center">
+                <h4 class="mb-0"><i class="bi bi-broadcast"></i> WVARA Login</h4>
+            </div>
+            <div class="card-body p-4">
+                <form method="POST" action="{{ url_for('login') }}">
+                    <div class="mb-3">
+                        <label for="call_sign" class="form-label">Call Sign</label>
+                        <input type="text" 
+                               class="form-control" 
+                               id="call_sign" 
+                               name="call_sign" 
+                               placeholder="Enter your call sign (e.g., W6SAL)"
+                               required 
+                               autofocus
+                               style="text-transform: uppercase;">
+                        <small class="form-text text-muted">Enter your amateur radio call sign</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="password" class="form-label">Password</label>
+                        <input type="password" 
+                               class="form-control" 
+                               id="password" 
+                               name="password" 
+                               placeholder="Enter your password"
+                               required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Verification Code</label>
+                        <div class="text-center mb-2">
+                            <img id="captcha-image" src="data:image/png;base64,{{ captcha }}" 
+                                 alt="CAPTCHA" 
+                                 style="border: 2px solid #dee2e6; border-radius: 5px; background: white;">
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-secondary mb-2" onclick="refreshCaptcha()">
+                            <i class="bi bi-arrow-clockwise"></i> New Image
+                        </button>
+                        <input type="text" 
+                               class="form-control" 
+                               id="captcha" 
+                               name="captcha" 
+                               placeholder="Enter the characters shown above"
+                               required
+                               autocomplete="off"
+                               style="text-transform: uppercase;">
+                        <small class="form-text text-muted">Not case-sensitive. Can't read it? Click "New Image" for a different code.</small>
+                    </div>
+                    
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary btn-lg">
+                            <i class="bi bi-box-arrow-in-right"></i> Login
+                        </button>
+                    </div>
+                </form>
+                
+                <hr class="my-4">
+                
+                <div class="text-center">
+                    <p class="text-muted small mb-0">
+                        <i class="bi bi-info-circle"></i> Forgot your password?<br>
+                        Contact an administrator to reset it.
+                    </p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="text-center mt-3">
+            <p class="text-muted small">
+                West Valley Amateur Radio Association<br>
+                Meetings: First Wednesday of each month
+            </p>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Cookie Consent Banner Logic
+    function checkCookieConsent() {
+        const cookieConsent = localStorage.getItem('WVARA_cookie_consent');
+        if (!cookieConsent) {
+            document.getElementById('cookie-banner').style.display = 'block';
+        }
+    }
+    
+    function acceptCookies() {
+        localStorage.setItem('WVARA_cookie_consent', 'accepted');
+        document.getElementById('cookie-banner').style.display = 'none';
+    }
+    
+    // Check on page load
+    window.addEventListener('DOMContentLoaded', checkCookieConsent);
+    
+    // Auto-uppercase call sign input
+    document.getElementById('call_sign').addEventListener('input', function(e) {
+        e.target.value = e.target.value.toUpperCase();
+    });
+    
+    // Auto-uppercase captcha input
+    document.getElementById('captcha').addEventListener('input', function(e) {
+        e.target.value = e.target.value.toUpperCase().replace(/\s/g, '');
+    });
+    
+    // Refresh CAPTCHA
+    function refreshCaptcha() {
+        fetch('{{ url_for("refresh_captcha") }}')
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('captcha-image').src = 'data:image/png;base64,' + data.captcha;
+                document.getElementById('captcha').value = '';
+                document.getElementById('captcha').focus();
+            })
+            .catch(error => {
+                console.error('Error refreshing CAPTCHA:', error);
+                alert('Could not refresh CAPTCHA. Please reload the page.');
+            });
+    }
+</script>
+{% endblock %}

@@ -1,0 +1,253 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Dues - WVARA Membership{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <h2 class="mb-4">
+            <i class="bi bi-credit-card"></i> Manage Dues Payments
+        </h2>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Left Panel: Record Payment Form -->
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-plus-circle"></i> Record Payment
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('admin_dues') }}" id="paymentForm">
+                    <input type="hidden" name="action" id="formAction" value="add">
+                    <input type="hidden" name="payment_id" id="paymentId" value="">
+                    
+                    <div class="mb-3">
+                        <label for="member_id" class="form-label">Member <span class="text-danger">*</span></label>
+                        <select class="form-select" id="member_id" name="member_id" required>
+                            <option value="">Select a member...</option>
+                            {% for member in members %}
+                                <option value="{{ member.id }}">
+                                    {{ member.call_sign }} - {{ member.get_full_name() }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="year" class="form-label">Year <span class="text-danger">*</span></label>
+                        <input type="number" 
+                               class="form-control" 
+                               id="year" 
+                               name="year" 
+                               value="{{ current_year }}" 
+                               min="2020" 
+                               max="2030" 
+                               required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="amount" class="form-label">Amount <span class="text-danger">*</span></label>
+                        <div class="input-group">
+                            <span class="input-group-text">$</span>
+                            <input type="number" 
+                                   class="form-control" 
+                                   id="amount" 
+                                   name="amount" 
+                                   step="0.01" 
+                                   value="25.00" 
+                                   required>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="payment_date" class="form-label">Payment Date <span class="text-danger">*</span></label>
+                        <input type="date" 
+                               class="form-control" 
+                               id="payment_date" 
+                               name="payment_date" 
+                               required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="payment_method" class="form-label">Payment Method</label>
+                        <select class="form-select" id="payment_method" name="payment_method">
+                            <option value="PayPal">PayPal</option>
+                            <option value="Cash">Cash</option>
+                            <option value="Check">Check</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="notes" class="form-label">Notes (optional)</label>
+                        <textarea class="form-control" id="notes" name="notes" rows="2"></textarea>
+                    </div>
+                    
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary" id="submitBtn">
+                            <i class="bi bi-check-circle"></i> <span id="submitText">Record Payment</span>
+                        </button>
+                        <button type="button" class="btn btn-secondary" id="cancelBtn" style="display: none;" onclick="resetForm()">
+                            <i class="bi bi-x-circle"></i> Cancel Edit
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Right Panel: Dues Status Table -->
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-table"></i> Dues Status - All Members
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover table-sm">
+                        <thead>
+                            <tr>
+                                <th>Call Sign</th>
+                                <th>Name</th>
+                                <th>Type</th>
+                                <th>Year</th>
+                                <th>Status</th>
+                                <th>Date</th>
+                                <th>Amount</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for data in member_payment_data %}
+                                <tr>
+                                    <td><strong>{{ data.member.call_sign }}</strong></td>
+                                    <td>{{ data.member.get_full_name() }}</td>
+                                    <td><small>{{ data.member.membership_type }}</small></td>
+                                    <td>
+                                        {% if data.payment %}
+                                            {{ data.payment.year }}
+                                        {% else %}
+                                            -
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if data.status == 'paid' %}
+                                            <span class="badge bg-success">
+                                                <i class="bi bi-check-circle"></i> Paid
+                                            </span>
+                                        {% else %}
+                                            <span class="badge bg-danger">
+                                                <i class="bi bi-x-circle"></i> Expired
+                                            </span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if data.payment %}
+                                            {{ data.payment.payment_date.strftime('%m/%d/%Y') }}
+                                        {% else %}
+                                            -
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if data.payment %}
+                                            ${{ "%.2f"|format(data.payment.amount) }}
+                                        {% else %}
+                                            -
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if data.payment %}
+                                            <button type="button" class="btn btn-sm btn-warning" 
+                                                    onclick="editPayment(
+                                                        '{{ data.payment.id }}',
+                                                        '{{ data.member.id }}',
+                                                        '{{ data.member.call_sign }}',
+                                                        '{{ data.member.get_full_name() }}',
+                                                        '{{ data.payment.year }}',
+                                                        '{{ data.payment.amount }}',
+                                                        '{{ data.payment.payment_date.strftime('%Y-%m-%d') }}',
+                                                        '{{ data.payment.payment_method }}',
+                                                        '{{ data.payment.notes or '' }}'
+                                                    )">
+                                                <i class="bi bi-pencil"></i> Edit
+                                            </button>
+                                        {% else %}
+                                            <button type="button" class="btn btn-sm btn-primary" 
+                                                    onclick="addPaymentFor('{{ data.member.id }}', '{{ data.member.call_sign }}', '{{ data.member.get_full_name() }}')">
+                                                <i class="bi bi-plus"></i> Add
+                                            </button>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Set today's date as default
+const today = new Date().toISOString().split('T')[0];
+document.getElementById('payment_date').value = today;
+
+// Edit payment function
+function editPayment(paymentId, memberId, callSign, name, year, amount, paymentDate, method, notes) {
+    // Switch to edit mode
+    document.getElementById('formAction').value = 'edit';
+    document.getElementById('paymentId').value = paymentId;
+    
+    // Populate form
+    document.getElementById('member_id').value = memberId;
+    document.getElementById('year').value = year;
+    document.getElementById('amount').value = amount;
+    document.getElementById('payment_date').value = paymentDate;
+    document.getElementById('payment_method').value = method;
+    document.getElementById('notes').value = notes;
+    
+    // Update button text
+    document.getElementById('submitText').textContent = 'Update Payment';
+    document.getElementById('cancelBtn').style.display = 'block';
+    
+    // Scroll to form
+    document.getElementById('paymentForm').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    
+    // Highlight the form
+    document.getElementById('paymentForm').style.border = '3px solid #ffc107';
+    setTimeout(() => {
+        document.getElementById('paymentForm').style.border = '';
+    }, 2000);
+}
+
+// Add payment for member without payment
+function addPaymentFor(memberId, callSign, name) {
+    resetForm();
+    document.getElementById('member_id').value = memberId;
+    document.getElementById('paymentForm').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// Reset form to add mode
+function resetForm() {
+    document.getElementById('formAction').value = 'add';
+    document.getElementById('paymentId').value = '';
+    document.getElementById('paymentForm').reset();
+    document.getElementById('payment_date').value = today;
+    document.getElementById('submitText').textContent = 'Record Payment';
+    document.getElementById('cancelBtn').style.display = 'none';
+}
+
+// Intercept form submission to add delete option when editing
+document.getElementById('paymentForm').addEventListener('submit', function(e) {
+    const action = document.getElementById('formAction').value;
+    if (action === 'edit') {
+        const confirmMsg = 'Do you want to UPDATE this payment, or DELETE it?\n\nClick OK to UPDATE, or Cancel to stay on this page.';
+        if (!confirm(confirmMsg)) {
+            e.preventDefault();
+        }
+    }
+});
+</script>
+{% endblock %}

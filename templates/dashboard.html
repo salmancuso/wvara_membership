@@ -1,0 +1,188 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - WVARA Membership{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <h2 class="mb-4">
+            <i class="bi bi-speedometer2"></i> Welcome, {{ member.first_name }}! 
+            <span class="badge bg-secondary">{{ member.call_sign }}</span>
+        </h2>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Profile Summary -->
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-person-circle"></i> Your Profile
+            </div>
+            <div class="card-body text-center">
+                {% if member.qrz_photo_url %}
+                    <img src="{{ member.qrz_photo_url }}" 
+                         alt="{{ member.call_sign }}" 
+                         class="profile-photo mb-3"
+                         style="width: 150px; height: 150px; object-fit: cover;">
+                {% else %}
+                    <div class="mb-3">
+                        <i class="bi bi-person-circle" style="font-size: 150px; color: var(--primary-color);"></i>
+                    </div>
+                {% endif %}
+                
+                <h5>{{ member.get_full_name() }}</h5>
+                <p class="text-muted mb-1">{{ member.call_sign }}</p>
+                {% if member.fcc_license_class %}
+                    <p class="text-muted mb-1">{{ member.fcc_license_class }}</p>
+                {% endif %}
+                <p class="text-muted">{{ member.membership_type }} Member</p>
+                
+                <div class="mb-3">
+                    <small class="text-muted">Member for {{ member.get_membership_duration() }}</small>
+                </div>
+                
+                <a href="{{ url_for('profile') }}" class="btn btn-primary btn-sm">
+                    <i class="bi bi-pencil"></i> Edit Profile
+                </a>
+                <a href="{{ url_for('change_password') }}" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-key"></i> Change Password
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Membership Status -->
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-credit-card"></i> Membership Status
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Dues Status ({{ current_year }})</h6>
+                        {% if dues_status %}
+                            <div class="alert alert-success">
+                                <i class="bi bi-check-circle-fill"></i> <strong>Paid</strong><br>
+                                <small>
+                                    Payment Date: {{ dues_status.payment_date.strftime('%B %d, %Y') }}<br>
+                                    Amount: ${{ "%.2f"|format(dues_status.amount) }}
+                                </small>
+                            </div>
+                        {% else %}
+                            <div class="alert alert-warning">
+                                <i class="bi bi-exclamation-triangle-fill"></i> <strong>Not Paid</strong><br>
+                                <small>Please contact the treasurer to pay your dues.</small>
+                            </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <h6>Account Status</h6>
+                        {% if member.is_active %}
+                            <span class="badge bg-success badge-status">
+                                <i class="bi bi-check-circle"></i> Active
+                            </span>
+                        {% else %}
+                            <span class="badge bg-danger badge-status">
+                                <i class="bi bi-x-circle"></i> Inactive
+                            </span>
+                        {% endif %}
+                        
+                        {% if member.is_admin %}
+                            <span class="badge bg-primary badge-status">
+                                <i class="bi bi-shield-check"></i> Administrator
+                            </span>
+                        {% endif %}
+                        
+                        <div class="mt-3">
+                            <small class="text-muted">
+                                <i class="bi bi-calendar"></i> Joined: {{ member.join_date.strftime('%B %Y') }}
+                            </small>
+                        </div>
+                    </div>
+                </div>
+                
+                {% if current_roles %}
+                <hr>
+                <h6>Current Roles</h6>
+                <ul class="list-unstyled">
+                    {% for role in current_roles %}
+                        <li>
+                            <i class="bi bi-award-fill text-primary"></i> 
+                            <strong>{{ role.role_name }}</strong>
+                            <small class="text-muted">(since {{ role.start_date.strftime('%B %Y') }})</small>
+                        </li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Recent Meeting Attendance -->
+        <div class="card mt-3">
+            <div class="card-header">
+                <i class="bi bi-calendar-check"></i> Recent Meeting Attendance
+            </div>
+            <div class="card-body">
+                {% if recent_meetings %}
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Meeting Date</th>
+                                <th>Attended</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for attendance in recent_meetings %}
+                                <tr>
+                                    <td>{{ attendance.meeting_date.strftime('%B %d, %Y') }}</td>
+                                    <td>
+                                        {% if attendance.attended %}
+                                            <i class="bi bi-check-circle-fill text-success"></i> Yes
+                                        {% else %}
+                                            <i class="bi bi-x-circle-fill text-danger"></i> No
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                {% else %}
+                    <p class="text-muted">No recent meeting attendance recorded.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-info-circle"></i> Club Information
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <h6><i class="bi bi-calendar-event"></i> Meetings</h6>
+                        <p>First Wednesday of each month<br>
+                        7:00 PM</p>
+                    </div>
+                    <div class="col-md-4">
+                        <h6><i class="bi bi-envelope"></i> Contact</h6>
+                        <p>For questions or concerns, contact:<br>
+                        President: KK6IK</p>
+                    </div>
+                    <div class="col-md-4">
+                        <h6><i class="bi bi-credit-card"></i> Dues</h6>
+                        <p>Annual dues are paid via PayPal<br>
+                        Contact treasurer for payment information</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

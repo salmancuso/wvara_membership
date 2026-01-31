@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Profile - WVARA Membership{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <h2 class="mb-4">
+            <i class="bi bi-person-circle"></i> Edit Your Profile
+        </h2>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-pencil"></i> Contact Information
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('profile') }}">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="first_name" class="form-label">First Name <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="first_name" name="first_name" 
+                                   value="{{ member.first_name }}" required>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="last_name" class="form-label">Last Name <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="last_name" name="last_name" 
+                                   value="{{ member.last_name }}" required>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="email" class="form-label">Email <span class="text-danger">*</span></label>
+                            <input type="email" class="form-control" id="email" name="email" 
+                                   value="{{ member.email }}" required>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="phone" class="form-label">Phone</label>
+                            <input type="tel" class="form-control" id="phone" name="phone" 
+                                   value="{{ member.phone or '' }}" 
+                                   placeholder="(123) 456-7890">
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="address" class="form-label">Street Address</label>
+                        <input type="text" class="form-control" id="address" name="address" 
+                               value="{{ member.address or '' }}" 
+                               placeholder="123 Main Street">
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-5 mb-3">
+                            <label for="city" class="form-label">City</label>
+                            <input type="text" class="form-control" id="city" name="city" 
+                                   value="{{ member.city or '' }}">
+                        </div>
+                        
+                        <div class="col-md-3 mb-3">
+                            <label for="state" class="form-label">State</label>
+                            <input type="text" class="form-control" id="state" name="state" 
+                                   value="{{ member.state or '' }}" 
+                                   placeholder="CA" 
+                                   maxlength="2" 
+                                   style="text-transform: uppercase;">
+                        </div>
+                        
+                        <div class="col-md-4 mb-3">
+                            <label for="zip_code" class="form-label">ZIP Code</label>
+                            <input type="text" class="form-control" id="zip_code" name="zip_code" 
+                                   value="{{ member.zip_code or '' }}" 
+                                   placeholder="12345">
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="fcc_license_class" class="form-label">FCC License Class</label>
+                        <select class="form-select" id="fcc_license_class" name="fcc_license_class">
+                            <option value="">Select license class</option>
+                            <option value="Technician" {% if member.fcc_license_class == 'Technician' %}selected{% endif %}>Technician</option>
+                            <option value="General" {% if member.fcc_license_class == 'General' %}selected{% endif %}>General</option>
+                            <option value="Amateur Extra" {% if member.fcc_license_class == 'Amateur Extra' %}selected{% endif %}>Amateur Extra</option>
+                        </select>
+                    </div>
+                    
+                    <hr class="my-4">
+                    
+                    <h5 class="mb-3"><i class="bi bi-telephone-plus"></i> Emergency Contact</h5>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="emergency_contact_name" class="form-label">Name <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="emergency_contact_name" 
+                                   name="emergency_contact_name" 
+                                   value="{{ member.emergency_contact_name }}" required>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="emergency_contact_phone" class="form-label">Phone <span class="text-danger">*</span></label>
+                            <input type="tel" class="form-control" id="emergency_contact_phone" 
+                                   name="emergency_contact_phone" 
+                                   value="{{ member.emergency_contact_phone }}" required>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="emergency_contact_relationship" class="form-label">Relationship</label>
+                        <input type="text" class="form-control" id="emergency_contact_relationship" 
+                               name="emergency_contact_relationship" 
+                               value="{{ member.emergency_contact_relationship or '' }}" 
+                               placeholder="Spouse, Parent, Sibling, Friend, etc.">
+                    </div>
+                    
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">
+                            <i class="bi bi-x-circle"></i> Cancel
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-check-circle"></i> Save Changes
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-info-circle"></i> Profile Information
+            </div>
+            <div class="card-body">
+                <p><strong>Call Sign:</strong> {{ member.call_sign }}</p>
+                <p><strong>Membership Type:</strong> {{ member.membership_type }}</p>
+                <p><strong>Join Date:</strong> {{ member.join_date.strftime('%B %d, %Y') }}</p>
+                <p><strong>Member For:</strong> {{ member.get_membership_duration() }}</p>
+                
+                <hr>
+                
+                {% if member.qrz_photo_url %}
+                    <div class="text-center mb-3">
+                        <img src="{{ member.qrz_photo_url }}" 
+                             alt="{{ member.call_sign }}" 
+                             class="profile-photo"
+                             style="width: 120px; height: 120px; object-fit: cover;">
+                    </div>
+                {% endif %}
+                
+                <form method="POST" action="{{ url_for('profile') }}" class="mb-3">
+                    <input type="hidden" name="action" value="update_qrz_photo">
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-arrow-repeat"></i> Update Photo from QRZ
+                        </button>
+                    </div>
+                </form>
+                
+                <p class="small text-muted">
+                    <i class="bi bi-camera"></i> Profile photos are retrieved from QRZ.com. 
+                    Make sure your QRZ.com profile has a photo, then click "Update Photo from QRZ" above.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Auto-uppercase state input
+    document.getElementById('state').addEventListener('input', function(e) {
+        e.target.value = e.target.value.toUpperCase();
+    });
+</script>
+{% endblock %}
