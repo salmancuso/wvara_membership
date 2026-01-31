@@ -30,7 +30,7 @@ python app.py
 
 Once started, open your web browser and go to:
 ```
-http://localhost:5000
+http://localhost:1977
 ```
 
 ## Login Credentials
@@ -122,7 +122,7 @@ See `sample_import.csv` for the required format.
 
 **Application won't start**:
 - Make sure Python 3.8+ is installed
-- Check that port 5000 is not in use
+- Check that port 1977 is not in use
 - Verify all dependencies are installed
 
 **Can't login**:

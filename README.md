@@ -72,7 +72,7 @@ A comprehensive web-based membership management system for the West Valley Amate
    python app.py
    ```
    
-   The application will be available at `http://localhost:5000`
+   The application will be available at `http://localhost:1977`
 
 ### Production Deployment
 
@@ -86,7 +86,7 @@ For production deployment on a cloud server:
 2. **Use a production WSGI server** (e.g., Gunicorn):
    ```bash
    pip install gunicorn
-   gunicorn -w 4 -b 0.0.0.0:5000 app:app
+   gunicorn -w 4 -b 0.0.0.0:1977 app:app
    ```
 
 3. **Set up a reverse proxy** (e.g., Nginx) for HTTPS

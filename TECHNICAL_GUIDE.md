@@ -236,7 +236,7 @@ For Larger Clubs (500+ members):
 
 ## Troubleshooting Common Issues
 
-### Issue: Port 5000 already in use
+### Issue: Port 1977 already in use
 Solution: Change port in app.py or kill the process using the port
 
 ### Issue: Database locked
