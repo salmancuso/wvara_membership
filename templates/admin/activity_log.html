@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{# ADDED 2026-11-06: Activity Log report (read-only: no edit or delete buttons by design) #}
+
+{% block title %}Activity Log - WVARA Membership{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <h2 class="mb-1">
+            <i class="bi bi-journal-check"></i> Activity Log
+        </h2>
+        <p class="text-muted mb-4">Every change made by an admin, plus members' edits to their own profile ("Self"). Newest first. Times are Pacific.</p>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <form method="GET" action="{{ url_for('report_activity') }}" class="row g-2 align-items-end">
+            <div class="col-6 col-md-3">
+                <label for="admin" class="form-label small mb-1">Admin</label>
+                <select class="form-select form-select-sm" id="admin" name="admin">
+                    <option value="">All</option>
+                    {% for a in admins %}
+                        <option value="{{ a }}" {% if filters.admin == a %}selected{% endif %}>{{ a }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="col-6 col-md-3">
+                <label for="member" class="form-label small mb-1">Member affected</label>
+                <input type="text" class="form-control form-control-sm" id="member" name="member"
+                       value="{{ filters.member }}" placeholder="Call sign">
+            </div>
+            <div class="col-6 col-md-2">
+                <label for="start" class="form-label small mb-1">From</label>
+                <input type="date" class="form-control form-control-sm" id="start" name="start" value="{{ filters.start }}">
+            </div>
+            <div class="col-6 col-md-2">
+                <label for="end" class="form-label small mb-1">To</label>
+                <input type="date" class="form-control form-control-sm" id="end" name="end" value="{{ filters.end }}">
+            </div>
+            <div class="col-12 col-md-2 d-flex gap-2">
+                <button type="submit" class="btn btn-sm btn-primary flex-fill"><i class="bi bi-funnel"></i> Filter</button>
+                <a href="{{ url_for('report_activity') }}" class="btn btn-sm btn-outline-secondary">Clear</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-list-ul"></i> {{ total }} entr{{ 'y' if total == 1 else 'ies' }}</span>
+        <a href="{{ url_for('report_activity', format='csv', **filters) }}" class="btn btn-sm btn-light">
+            <i class="bi bi-file-earmark-spreadsheet"></i> Download CSV
+        </a>
+    </div>
+    <div class="card-body">
+        {% if rows %}
+        <div class="table-responsive">
+            <table class="table table-sm table-hover align-top">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Time</th>
+                        <th>Admin</th>
+                        <th>Member affected</th>
+                        <th>What happened</th>
+                        <th>What changed</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for r in rows %}
+                    {% set e = r.entry %}
+                    {% set target = names.get(e.target_member_call_sign) if e.target_member_call_sign else None %}
+                    <tr>
+                        <td class="text-nowrap">{{ r.when.strftime('%Y-%m-%d') if r.when else '' }}</td>
+                        <td class="text-nowrap">{{ r.when.strftime('%I:%M %p') if r.when else '' }}</td>
+                        <td class="text-nowrap"><strong>{{ e.admin_call_sign }}</strong>
+                            {% if r.is_self %}<span class="badge bg-light text-secondary border fw-normal">Self</span>{% endif %}</td>
+                        <td class="text-nowrap">
+                            {% if target %}
+                                <a href="{{ url_for('admin_member_detail', member_id=target.id) }}">{{ e.target_member_call_sign }}</a>
+                                <br><small class="text-muted">{{ target.get_full_name() }}</small>
+                            {% elif e.target_member_call_sign %}
+                                {{ e.target_member_call_sign }} <small class="text-muted">(no longer in the database)</small>
+                            {% else %}
+                                <span class="text-muted">-</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ e.action }}</td>
+                        <td><small style="white-space: pre-wrap; word-break: break-word;">{{ (e.details or '').replace('; ', '\n') }}</small></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        {% if pages > 1 %}
+        <nav>
+            <ul class="pagination pagination-sm justify-content-center mb-0">
+                <li class="page-item {% if page == 1 %}disabled{% endif %}">
+                    <a class="page-link" href="{{ url_for('report_activity', page=page - 1, **filters) }}">Prev</a>
+                </li>
+                {% for p in range(1, pages + 1) %}
+                <li class="page-item {% if p == page %}active{% endif %}">
+                    <a class="page-link" href="{{ url_for('report_activity', page=p, **filters) }}">{{ p }}</a>
+                </li>
+                {% endfor %}
+                <li class="page-item {% if page == pages %}disabled{% endif %}">
+                    <a class="page-link" href="{{ url_for('report_activity', page=page + 1, **filters) }}">Next</a>
+                </li>
+            </ul>
+        </nav>
+        {% endif %}
+        {% else %}
+            <p class="text-muted mb-0">No entries match these filters.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

@@ -156,6 +156,52 @@ def log_admin_action(action, target_member_call_sign=None, details=None):
     db.session.commit()
 
 
+# ADDED 2026-11-06: field-by-field "old → new" detail for the Activity Log
+MEMBER_LOG_FIELDS = [
+    ('call_sign', 'Call sign'), ('first_name', 'First name'), ('last_name', 'Last name'),
+    ('email', 'Email'), ('phone', 'Phone'), ('address', 'Address'), ('city', 'City'),
+    ('state', 'State'), ('zip_code', 'ZIP'), ('fcc_license_class', 'License class'),
+    ('membership_type', 'Membership type'), ('join_date', 'Join date'),
+    ('emergency_contact_name', 'Emergency contact'), ('emergency_contact_phone', 'Emergency phone'),
+    ('emergency_contact_relationship', 'Emergency relationship'),
+    ('directory_opt_out', 'Directory opt-out'), ('is_licensed', 'Licensed ham'),
+]
+DUES_LOG_FIELDS = [
+    ('year', 'Year'), ('amount', 'Amount'), ('payment_date', 'Payment date'),
+    ('payment_method', 'Method'), ('notes', 'Notes'),
+]
+LOG_VALUE_MAX = 200   # long values (notes) are trimmed in the log
+
+
+def log_snapshot(obj, fields) -> dict:
+    """Current values of the listed fields, taken before an edit"""
+    return {name: getattr(obj, name, None) for name, _ in fields}
+
+
+def log_value(value) -> str:
+    """How a value reads in the Activity Log"""
+    if value is None or (isinstance(value, str) and value.strip() == ''):
+        return '(blank)'
+    if isinstance(value, bool):
+        return 'Yes' if value else 'No'
+    if isinstance(value, (date, datetime)):
+        return value.strftime('%Y-%m-%d')
+    if isinstance(value, float):
+        return f'{value:.2f}'
+    text = str(value).replace('\r\n', '\n').replace('\n', ' / ').strip()
+    return text if len(text) <= LOG_VALUE_MAX else text[:LOG_VALUE_MAX - 3] + '...'
+
+
+def describe_changes(before: dict, obj, fields) -> str:
+    """'Phone: 408-555-1111 → 408-555-2222; City: (blank) → San Jose' for every field that changed"""
+    parts = []
+    for name, label in fields:
+        old, new = before.get(name), getattr(obj, name, None)
+        if log_value(old) != log_value(new):
+            parts.append(f'{label}: {log_value(old)} → {log_value(new)}')
+    return '; '.join(parts)
+
+
 def validate_password(password):
     """Validate password meets requirements"""
     if len(password) < 10:
@@ -825,6 +871,8 @@ def profile():
                 flash('Could not retrieve photo from QRZ.com. Make sure your call sign has a photo on QRZ.', 'warning')
             return redirect(url_for('profile'))
         
+        before = log_snapshot(member, MEMBER_LOG_FIELDS)  # ADDED 2026-11-06: for the Activity Log
+
         # Update contact information
         member.first_name = request.form.get('first_name')
         member.last_name = request.form.get('last_name')
@@ -834,7 +882,7 @@ def profile():
         member.city = request.form.get('city')
         member.state = request.form.get('state')
         member.zip_code = request.form.get('zip_code')
-        
+
         # Emergency contact
         member.emergency_contact_name = request.form.get('emergency_contact_name')
         member.emergency_contact_phone = request.form.get('emergency_contact_phone')
@@ -848,8 +896,12 @@ def profile():
 
         member.updated_at = datetime.utcnow()
         member.last_contact = datetime.utcnow()
-        
+
         db.session.commit()
+        # ADDED 2026-11-06: member self-edits go in the Activity Log (Admin column shows "Self")
+        changes = describe_changes(before, member, MEMBER_LOG_FIELDS)
+        if changes:
+            log_admin_action('Updated own profile', member.call_sign, changes)
         flash('Profile updated successfully!', 'success')
         
         return redirect(url_for('profile'))
@@ -1152,6 +1204,7 @@ def admin_member_detail(member_id):
         action = request.form.get('action')
         
         if action == 'update_info':
+            before = log_snapshot(member, MEMBER_LOG_FIELDS)  # ADDED 2026-11-06: for the Activity Log
             # Update member information including call sign and join date
             new_call_sign = request.form.get('call_sign', '').upper().strip()
             
@@ -1201,7 +1254,9 @@ def admin_member_detail(member_id):
                                  member.call_sign)
 
             db.session.commit()
-            log_admin_action(f'Updated member information', member.call_sign)
+            # CHANGED 2026-11-06: the log now says exactly which fields changed (old → new)
+            log_admin_action(f'Updated member information', member.call_sign,
+                             describe_changes(before, member, MEMBER_LOG_FIELDS) or 'No fields changed')
             flash('Member information updated successfully!', 'success')
         
         # ADDED 2026-11-04: lockout guards (no removing your own access, never zero admins)
@@ -1288,9 +1343,11 @@ def admin_member_detail(member_id):
         elif action == 'update_admin_notes':
             new_notes = (request.form.get('admin_notes') or '').replace('\r\n', '\n').strip()
             if new_notes != (member.admin_notes or ''):
+                old_notes = member.admin_notes
                 member.admin_notes = new_notes or None
                 db.session.commit()
-                log_admin_action('Updated admin notes', member.call_sign)
+                log_admin_action('Updated admin notes', member.call_sign,
+                                 f'Admin notes: {log_value(old_notes)} → {log_value(member.admin_notes)}')
                 flash('Admin notes saved.', 'success')
             else:
                 flash('No changes to the admin notes.', 'info')
@@ -1370,7 +1427,9 @@ def admin_dues():
                 db.session.commit()
                 
                 member = Member.query.get(member_id)
-                log_admin_action(f'Recorded dues payment for {year}', member.call_sign, f'Amount: ${amount}')
+                # CHANGED 2026-11-06: date and method added to the log
+                log_admin_action(f'Recorded dues payment for {year}', member.call_sign,
+                                 f'Amount: ${amount}; date: {log_value(payment_date)}; method: {payment_method}')
                 flash('Dues payment recorded successfully!', 'success')
         
         elif action == 'edit':
@@ -1391,14 +1450,17 @@ def admin_dues():
                 payment = None
 
             if payment:
+                before = log_snapshot(payment, DUES_LOG_FIELDS)  # ADDED 2026-11-06: for the Activity Log
                 payment.year = int(request.form.get('year'))
                 payment.amount = float(request.form.get('amount'))
                 payment.payment_date = datetime.strptime(request.form.get('payment_date'), '%Y-%m-%d').date()
                 payment.payment_method = request.form.get('payment_method', 'PayPal')
                 payment.notes = request.form.get('notes', '')
-                
+
                 db.session.commit()
-                log_admin_action(f'Updated dues payment for {payment.year}', payment.member.call_sign)
+                # CHANGED 2026-11-06: log what changed (old → new)
+                log_admin_action(f'Updated dues payment for {payment.year}', payment.member.call_sign,
+                                 describe_changes(before, payment, DUES_LOG_FIELDS) or 'No fields changed')
                 flash('Dues payment updated successfully!', 'success')
         
         elif action == 'delete':
@@ -1408,9 +1470,12 @@ def admin_dues():
             if payment:
                 member_call = payment.member.call_sign
                 year = payment.year
+                # ADDED 2026-11-06: record what was deleted
+                deleted = (f'Deleted: {year}, ${payment.amount:.2f}, {log_value(payment.payment_date)}, '
+                           f'{payment.payment_method or "(no method)"}; notes: {log_value(payment.notes)}')
                 db.session.delete(payment)
                 db.session.commit()
-                log_admin_action(f'Deleted dues payment for {year}', member_call)
+                log_admin_action(f'Deleted dues payment for {year}', member_call, deleted)  # CHANGED 2026-11-06: details
                 flash('Dues payment deleted successfully!', 'success')
 
         # ADDED 2026-11-05: confirm or dismiss a PayPal payment a member started
@@ -1632,7 +1697,8 @@ def admin_roles():
             db.session.commit()
             
             member = Member.query.get(member_id)
-            log_admin_action(f'Added role: {role_name}', member.call_sign)
+            log_admin_action(f'Added role: {role_name}', member.call_sign,
+                             f'Starts {log_value(start_date)}')  # CHANGED 2026-11-06: start date in the log
             flash(f'Role "{role_name}" added for {member.call_sign}', 'success')
         
         elif action == 'end':
@@ -1644,7 +1710,8 @@ def admin_roles():
             role.is_current = False
             db.session.commit()
             
-            log_admin_action(f'Ended role: {role.role_name}', role.member.call_sign)
+            log_admin_action(f'Ended role: {role.role_name}', role.member.call_sign,
+                             f'Started {log_value(role.start_date)}, ended {log_value(end_date)}')  # CHANGED 2026-11-06
             flash('Role ended successfully', 'success')
         
         return redirect(url_for('admin_roles'))
@@ -1664,6 +1731,81 @@ def admin_roles():
 def admin_reports():
     """Reports page"""
     return render_template('admin/reports.html')
+
+
+# ADDED 2026-11-06: Activity Log report: who changed what, when, and for whom. Read-only by design.
+ACTIVITY_PAGE_SIZE = 100
+
+
+def filtered_activity(args) -> tuple:
+    """Admin Log entries (newest first) matching the admin / member / date filters, with Pacific times"""
+    admin = (args.get('admin') or '').strip().upper()
+    member = (args.get('member') or '').strip().upper()
+    start = args.get('start') or ''
+    end = args.get('end') or ''
+    try:
+        start_date = datetime.strptime(start, '%Y-%m-%d').date() if start else None
+    except ValueError:
+        start_date = None
+    try:
+        end_date = datetime.strptime(end, '%Y-%m-%d').date() if end else None
+    except ValueError:
+        end_date = None
+
+    rows = []
+    for entry in AdminLog.query.order_by(AdminLog.created_at.desc(), AdminLog.id.desc()).all():
+        when = to_pacific(entry.created_at) if entry.created_at else None
+        if admin and (entry.admin_call_sign or '').upper() != admin:
+            continue
+        if member and member not in (entry.target_member_call_sign or '').upper():
+            continue
+        if start_date and (when is None or when.date() < start_date):
+            continue
+        if end_date and (when is None or when.date() > end_date):
+            continue
+        rows.append({'entry': entry, 'when': when,
+                     'is_self': bool(entry.target_member_call_sign)
+                     and entry.admin_call_sign == entry.target_member_call_sign})
+    filters = {'admin': admin, 'member': member, 'start': start if start_date else '', 'end': end if end_date else ''}
+    return rows, filters
+
+
+@app.route('/admin/reports/activity')
+@admin_required
+def report_activity():
+    """Activity Log: every logged admin action (and member self-edits), newest first"""
+    rows, filters = filtered_activity(request.args)
+
+    if request.args.get('format') == 'csv':
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow(['Date', 'Time (Pacific)', 'Admin', 'Self edit', 'Member affected',
+                         'What happened', 'What changed', 'IP address'])
+        for r in rows:
+            e = r['entry']
+            writer.writerow([r['when'].strftime('%Y-%m-%d') if r['when'] else '',
+                             r['when'].strftime('%I:%M %p') if r['when'] else '',
+                             e.admin_call_sign, 'Yes' if r['is_self'] else '',
+                             e.target_member_call_sign or '', e.action, e.details or '', e.ip_address or ''])
+        log_admin_action('Downloaded Activity Log CSV', details=f'{len(rows)} entries')
+        output.seek(0)
+        return send_file(
+            io.BytesIO(output.getvalue().encode('utf-8')),
+            mimetype='text/csv',
+            as_attachment=True,
+            download_name=f'WVARA_activity_log_{date.today().strftime("%Y%m%d")}.csv'
+        )
+
+    page = max(request.args.get('page', 1, type=int), 1)
+    pages = max((len(rows) + ACTIVITY_PAGE_SIZE - 1) // ACTIVITY_PAGE_SIZE, 1)
+    page = min(page, pages)
+    shown = rows[(page - 1) * ACTIVITY_PAGE_SIZE: page * ACTIVITY_PAGE_SIZE]
+
+    names = {m.call_sign: m for m in Member.query.all()}
+    admins = sorted({e.admin_call_sign for e in AdminLog.query.with_entities(AdminLog.admin_call_sign).all()
+                     if e.admin_call_sign})
+    return render_template('admin/activity_log.html', rows=shown, total=len(rows), page=page, pages=pages,
+                           filters=filters, names=names, admins=admins)
 
 
 # ADDED 2026-11-04: member-facing Reports page (any logged-in member)

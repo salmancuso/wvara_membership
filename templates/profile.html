@@ -104,14 +104,14 @@
                             <label for="emergency_contact_name" class="form-label">Name <span class="text-danger">*</span></label>
                             <input type="text" class="form-control" id="emergency_contact_name" 
                                    name="emergency_contact_name" 
-                                   value="{{ member.emergency_contact_name }}" required>
+                                   value="{{ member.emergency_contact_name or '' }}" required>{# CHANGED 2026-11-06: blank shows blank, not "None" #}
                         </div>
                         
                         <div class="col-md-6 mb-3">
                             <label for="emergency_contact_phone" class="form-label">Phone <span class="text-danger">*</span></label>
                             <input type="tel" class="form-control" id="emergency_contact_phone" 
                                    name="emergency_contact_phone" 
-                                   value="{{ member.emergency_contact_phone }}" required>
+                                   value="{{ member.emergency_contact_phone or '' }}" required>{# CHANGED 2026-11-06: blank shows blank, not "None" #}
                         </div>
                     </div>
                     

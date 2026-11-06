@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+
+{% block title %}Reports - WVARA Membership{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <h2 class="mb-4">
+            <i class="bi bi-file-earmark-text"></i> Reports
+        </h2>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card mb-3">
+            <div class="card-header">
+                <i class="bi bi-people"></i> Member Directory
+            </div>
+            <div class="card-body">
+                <p>Generate a complete list of all active members with their contact information.</p>
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('report_directory', format='pdf') }}" 
+                       class="btn btn-primary" 
+                       target="_blank">
+                        <i class="bi bi-file-pdf"></i> Download PDF
+                    </a>
+                    <a href="{{ url_for('report_directory', format='csv') }}" 
+                       class="btn btn-outline-primary">
+                        <i class="bi bi-file-earmark-spreadsheet"></i> Download CSV
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card mb-3">
+            <div class="card-header">
+                <i class="bi bi-credit-card"></i> Dues Status Report
+            </div>
+            <div class="card-body">
+                <p>View current year dues payment status for all active members.</p>
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('report_dues_status', format='csv') }}" 
+                       class="btn btn-primary">
+                        <i class="bi bi-file-earmark-spreadsheet"></i> Download CSV
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card mb-3">
+            <div class="card-header">
+                <i class="bi bi-calendar-check"></i> Attendance Report
+            </div>
+            <div class="card-body">
+                <p>Generate an attendance report showing member participation over the last 12 meetings.</p>
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('report_attendance', format='csv') }}" 
+                       class="btn btn-primary">
+                        <i class="bi bi-file-earmark-spreadsheet"></i> Download CSV
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card mb-3">
+            <div class="card-header">
+                <i class="bi bi-envelope"></i> Email Distribution List
+            </div>
+            <div class="card-body">
+                <p>Export email addresses for all active members for use in email campaigns.</p>
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('report_email_list') }}" 
+                       class="btn btn-primary">
+                        <i class="bi bi-file-earmark-spreadsheet"></i> Download CSV
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card mb-3">
+            <div class="card-header">
+                <i class="bi bi-mailbox"></i> Mailing Labels
+            </div>
+            <div class="card-body">
+                <p>Export mailing addresses for all active members, sorted by ZIP code.</p>
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('report_mailing_labels') }}" 
+                       class="btn btn-primary">
+                        <i class="bi bi-file-earmark-spreadsheet"></i> Download CSV
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-6">
+        <div class="card mb-3">
+            <div class="card-header">
+                <i class="bi bi-info-circle"></i> Report Information
+            </div>
+            <div class="card-body">
+                <p class="small">
+                    <strong>CSV Format:</strong> Can be opened in Excel, Google Sheets, or any spreadsheet application.
+                </p>
+                <p class="small">
+                    <strong>PDF Format:</strong> Ready for printing or sharing. Available for member directory.
+                </p>
+                <p class="small mb-0">
+                    <strong>Privacy Note:</strong> These reports contain member contact information. 
+                    Handle them securely and in accordance with club privacy policies.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

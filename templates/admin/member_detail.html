@@ -117,11 +117,12 @@
                     <div class="row">
                         <div class="col-md-4 mb-3">
                             <label class="form-label">Name</label>
-                            <input type="text" class="form-control" name="emergency_contact_name" value="{{ member.emergency_contact_name }}" required>
+                            {# CHANGED 2026-11-06: blank shows blank (was the word "None"); optional for admins, since imported members have none on file #}
+                            <input type="text" class="form-control" name="emergency_contact_name" value="{{ member.emergency_contact_name or '' }}">
                         </div>
                         <div class="col-md-4 mb-3">
                             <label class="form-label">Phone</label>
-                            <input type="tel" class="form-control" name="emergency_contact_phone" value="{{ member.emergency_contact_phone }}" required>
+                            <input type="tel" class="form-control" name="emergency_contact_phone" value="{{ member.emergency_contact_phone or '' }}">
                         </div>
                         <div class="col-md-4 mb-3">
                             <label class="form-label">Relationship</label>

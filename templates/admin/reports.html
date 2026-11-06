@@ -126,4 +126,26 @@
         </div>
     </div>
 </div>
+
+<!-- ADDED 2026-11-06: Activity Log -->
+<div class="row">
+    <div class="col-md-6">
+        <div class="card mb-3">
+            <div class="card-header">
+                <i class="bi bi-journal-check"></i> Activity Log
+            </div>
+            <div class="card-body">
+                <p>Who changed what, when, and for which member: every admin change plus members' edits to their own profile.</p>
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('report_activity') }}" class="btn btn-primary">
+                        <i class="bi bi-eye"></i> View Activity Log
+                    </a>
+                    <a href="{{ url_for('report_activity', format='csv') }}" class="btn btn-outline-primary">
+                        <i class="bi bi-file-earmark-spreadsheet"></i> Download CSV
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
