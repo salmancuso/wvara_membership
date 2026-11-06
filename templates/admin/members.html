@@ -160,8 +160,8 @@
                                         {% else %}
                                             <span class="badge bg-secondary">Disabled</span>
                                         {% endif %}
-                                        {% if member.is_admin %}
-                                            <span class="badge bg-primary">Admin</span>
+                                        {% if member.is_admin %}{# CHANGED 2026-11-06: show the access level #}
+                                            <span class="badge bg-primary">{{ admin_level_label(member) }}</span>
                                         {% endif %}
                                     </td>
                                     <td>

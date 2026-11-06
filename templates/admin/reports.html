@@ -127,7 +127,8 @@
     </div>
 </div>
 
-<!-- ADDED 2026-11-06: Activity Log -->
+<!-- ADDED 2026-11-06: Activity Log (Club Administrator and up) -->
+{% if viewer_admin_rank >= 2 %}
 <div class="row">
     <div class="col-md-6">
         <div class="card mb-3">
@@ -148,4 +149,5 @@
         </div>
     </div>
 </div>
+{% endif %}
 {% endblock %}

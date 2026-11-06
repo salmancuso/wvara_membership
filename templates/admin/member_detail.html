@@ -325,8 +325,8 @@
                     <span class="badge bg-danger mb-2">Inactive</span>
                 {% endif %}
                 
-                {% if member.is_admin %}
-                    <span class="badge bg-primary mb-2">Administrator</span>
+                {% if member.is_admin %}{# CHANGED 2026-11-06: show the access level #}
+                    <span class="badge bg-primary mb-2">{{ admin_level_label(member) }}</span>
                 {% endif %}
                 
                 {% if member.is_dues_current() %}
@@ -422,25 +422,63 @@
                 <i class="bi bi-lightning"></i> Quick Actions
             </div>
             <div class="card-body d-grid gap-2">
-                <form method="POST" action="{{ url_for('admin_member_detail', member_id=member.id) }}">
-                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                    <input type="hidden" name="action" value="toggle_admin">
-                    <button type="submit" class="btn btn-warning w-100">
-                        <i class="bi bi-shield"></i> 
-                        {% if member.is_admin %}Revoke{% else %}Grant{% endif %} Admin Access
-                    </button>
-                </form>
-                
+                {# CHANGED 2026-11-06: buttons follow the viewer's access level; the server checks the same rules #}
+                {% set target_rank = admin_rank(member) %}
+                {% set can_touch = target_rank <= viewer_admin_rank %}
+                {% set is_self = member.call_sign == session.get('call_sign') %}
+
+                {# ADDED 2026-11-06: access level (replaces Grant/Revoke Admin Access) #}
+                <div class="border rounded p-2">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <label for="admin_level" class="form-label small fw-bold mb-0">Access level</label>
+                        <button type="button" class="btn btn-sm btn-link p-0" data-bs-toggle="modal" data-bs-target="#accessLevelsModal"
+                                title="What do the access levels mean?">
+                            <i class="bi bi-question-circle"></i> What's this?
+                        </button>
+                    </div>
+                    {% if viewer_admin_rank >= 2 and can_touch and not is_self %}
+                    <form method="POST" action="{{ url_for('admin_member_detail', member_id=member.id) }}" class="d-flex gap-2">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <input type="hidden" name="action" value="set_access_level">
+                        <select class="form-select form-select-sm" id="admin_level" name="admin_level">
+                            {% for key, label in ADMIN_LEVEL_LABELS.items() %}
+                                {% if ADMIN_LEVELS.get(key, 0) <= viewer_admin_rank %}
+                                <option value="{{ key }}" {% if admin_level_of(member) == key %}selected{% endif %}>{{ label }}</option>
+                                {% endif %}
+                            {% endfor %}
+                        </select>
+                        <button type="submit" class="btn btn-sm btn-warning text-nowrap">
+                            <i class="bi bi-shield"></i> Save
+                        </button>
+                    </form>
+                    {% else %}
+                        <div class="small">{{ admin_level_label(member) }}
+                            {% if is_self %}<span class="text-muted">(another admin must change your own level)</span>
+                            {% elif viewer_admin_rank < 2 %}<span class="text-muted">(Club Administrator and up can change this)</span>
+                            {% elif not can_touch %}<span class="text-muted">(above your level)</span>{% endif %}
+                        </div>
+                    {% endif %}
+                </div>
+
+                {% if not can_touch %}
+                    <div class="alert alert-secondary small py-2 mb-0">
+                        {{ member.call_sign }} is a {{ admin_level_label(member) }}, above your access level, so only a higher-level admin can change this record.
+                    </div>
+                {% endif %}
+
+                {% if viewer_admin_rank >= 2 and can_touch %}
                 <form method="POST" action="{{ url_for('admin_member_detail', member_id=member.id) }}">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="hidden" name="action" value="toggle_active">
                     <button type="submit" class="btn btn-info w-100">
-                        <i class="bi bi-toggle-on"></i> 
+                        <i class="bi bi-toggle-on"></i>
                         {% if member.is_active %}Deactivate{% else %}Activate{% endif %} Member
                     </button>
                 </form>
-                
-                <form method="POST" action="{{ url_for('admin_member_detail', member_id=member.id) }}" 
+                {% endif %}
+
+                {% if can_touch and (target_rank == 0 or viewer_admin_rank >= 2) %}
+                <form method="POST" action="{{ url_for('admin_member_detail', member_id=member.id) }}"
                       onsubmit="return confirm('This will generate a new temporary password. Continue?');">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="hidden" name="action" value="reset_password">
@@ -448,10 +486,12 @@
                         <i class="bi bi-key"></i> Reset Password
                     </button>
                 </form>
-                
+                {% endif %}
+
+                {% if viewer_admin_rank >= 2 and can_touch %}
                 <hr>
-                
-                <form method="POST" action="{{ url_for('admin_member_detail', member_id=member.id) }}" 
+
+                <form method="POST" action="{{ url_for('admin_member_detail', member_id=member.id) }}"
                       onsubmit="return confirm('Are you sure you want to PERMANENTLY DELETE this member?\n\nThis will delete:\n- Member account\n- Dues payment history\n- Attendance records\n- Role history\n\nThis action CANNOT be undone!');">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="hidden" name="action" value="delete_member">
@@ -459,8 +499,10 @@
                         <i class="bi bi-trash"></i> Delete Member
                     </button>
                 </form>
+                {% endif %}
             </div>
         </div>
     </div>
 </div>
+{% include 'admin/_access_levels_modal.html' %}{# ADDED 2026-11-06 #}
 {% endblock %}

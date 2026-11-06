@@ -1,0 +1,42 @@
+{# ADDED 2026-11-06: "What's this?" lightbox explaining the admin access levels #}
+<div class="modal fade" id="accessLevelsModal" tabindex="-1" aria-labelledby="accessLevelsModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="accessLevelsModalLabel"><i class="bi bi-shield-lock"></i> Admin access levels</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small text-muted">Access levels are set by hand on each member's page. They are separate from club Roles
+                    (President, Treasurer and so on): holding an office does not grant access by itself.</p>
+
+                <h6 class="mb-1">Records Manager</h6>
+                <p class="small">For board members and the Secretary. Can update member records and admin notes, add members,
+                    confirm family links, take attendance, manage Roles, run reports and see the Member Map.
+                    Can reset a <em>regular member's</em> password. <strong>Cannot</strong> record or change dues,
+                    see the Activity Log, deactivate or delete members, or change anyone's access.</p>
+
+                <h6 class="mb-1">Club Administrator</h6>
+                <p class="small">For officers such as the President, Vice President and Treasurer. Everything a Records Manager can do,
+                    plus dues and PayPal payments, the Activity Log, deactivating or deleting members, and setting access
+                    up to Club Administrator. <strong>Cannot</strong> change a System Administrator.</p>
+
+                <h6 class="mb-1">System Administrator</h6>
+                <p class="small">For the people who run the tool itself. Full access, including granting or removing
+                    System Administrator.</p>
+
+                <hr>
+                <h6 class="mb-1">Safety rules for everyone</h6>
+                <ul class="small mb-0">
+                    <li>Nobody can change, reset the password of, deactivate or delete someone at a higher level.</li>
+                    <li>Nobody can change their own access level.</li>
+                    <li>There is always at least one active System Administrator.</li>
+                    <li>Every change is recorded in the Activity Log.</li>
+                </ul>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>

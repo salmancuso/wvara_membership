@@ -147,7 +147,9 @@
                                 <ul class="dropdown-menu">
                                     <li><a class="dropdown-item" href="{{ url_for('admin_dashboard') }}">Dashboard</a></li>
                                     <li><a class="dropdown-item" href="{{ url_for('admin_members') }}">Members</a></li>
+                                    {% if viewer_admin_rank >= 2 %}{# CHANGED 2026-11-06: Club Administrator and up #}
                                     <li><a class="dropdown-item" href="{{ url_for('admin_dues') }}">Dues</a></li>
+                                    {% endif %}
                                     <li><a class="dropdown-item" href="{{ url_for('admin_attendance') }}">Attendance</a></li>
                                     <li><a class="dropdown-item" href="{{ url_for('admin_roles') }}">Roles</a></li>
                                     <li><hr class="dropdown-divider"></li>

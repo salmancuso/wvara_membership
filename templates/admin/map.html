@@ -71,7 +71,7 @@
                     <span class="license-pct">{{ chip.pct }}%</span>
                 </span>
             {% endfor %}
-            {% if admin_view and license_blank_count %}
+            {% if admin_view and license_blank_count and viewer_admin_rank >= 2 %}{# CHANGED 2026-11-06: Club Administrator and up #}
                 <form method="POST" action="{{ url_for('admin_fill_license_classes') }}" class="ms-auto"
                       onsubmit="const b = this.querySelector('button'); setTimeout(() => { b.disabled = true; b.innerHTML = 'Checking the FCC&hellip;'; }, 0);">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">

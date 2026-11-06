@@ -108,6 +108,13 @@ def ensure_schema():
                 conn.exec_driver_sql(
                     "ALTER TABLE members ADD COLUMN admin_notes TEXT")
                 print("Database updated: added members.admin_notes")
+            # ADDED 2026-11-06: admin access levels; everyone who is an admin today becomes a System Administrator
+            if 'admin_level' not in columns:
+                conn.exec_driver_sql(
+                    "ALTER TABLE members ADD COLUMN admin_level VARCHAR(10)")
+                conn.exec_driver_sql(
+                    "UPDATE members SET admin_level = 'system' WHERE is_admin = 1")
+                print("Database updated: added members.admin_level (current admins set to System Administrator)")
 
 
 ensure_schema()
@@ -138,9 +145,86 @@ def admin_required(f):
         if not member or not member.is_admin:
             flash('You do not have permission to access this page.', 'danger')
             return redirect(url_for('dashboard'))
-        
+
         return f(*args, **kwargs)
     return decorated_function
+
+
+# ADDED 2026-11-06: three admin access levels (Records Manager < Club Administrator < System Administrator)
+ADMIN_LEVELS = {'records': 1, 'club': 2, 'system': 3}
+ADMIN_LEVEL_LABELS = {
+    '': 'No admin access',
+    'records': 'Records Manager',
+    'club': 'Club Administrator',
+    'system': 'System Administrator',
+}
+
+
+def admin_level_of(member) -> str:
+    """'records' / 'club' / 'system', or '' for no admin access.
+    An admin with no level recorded counts as the lowest level (least access)."""
+    if not member or not member.is_admin:
+        return ''
+    level = (member.admin_level or '').strip().lower()
+    return level if level in ADMIN_LEVELS else 'records'
+
+
+def admin_rank(member) -> int:
+    """0 = no admin access, 1 = Records Manager, 2 = Club Administrator, 3 = System Administrator"""
+    return ADMIN_LEVELS.get(admin_level_of(member), 0)
+
+
+def admin_level_label(member) -> str:
+    return ADMIN_LEVEL_LABELS[admin_level_of(member)]
+
+
+def current_viewer():
+    """The logged-in member, or None"""
+    if 'call_sign' not in session:
+        return None
+    return Member.query.filter_by(call_sign=session['call_sign']).first()
+
+
+def admin_level_required(min_level):
+    """Decorator: the viewer needs at least this admin level ('records', 'club' or 'system')"""
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            if 'call_sign' not in session:
+                flash('Please log in to access this page.', 'warning')
+                return redirect(url_for('login'))
+            viewer = current_viewer()
+            if admin_rank(viewer) < ADMIN_LEVELS[min_level]:
+                flash(f'This page needs {ADMIN_LEVEL_LABELS[min_level]} access or higher.', 'danger')
+                return redirect(url_for('admin_dashboard') if admin_rank(viewer) else url_for('dashboard'))
+            return f(*args, **kwargs)
+        return decorated_function
+    return decorator
+
+
+def active_system_admin_count() -> int:
+    return Member.query.filter_by(is_admin=True, is_active=True, admin_level='system').count()
+
+
+CLUB_ADMIN_ACTIONS = ('toggle_active', 'delete_member', 'set_access_level')
+
+
+def member_action_block_reason(action, viewer, member):
+    """Why the viewer may NOT do this action on this member's page (None means allowed)"""
+    v_rank, t_rank = admin_rank(viewer), admin_rank(member)
+    if action == 'toggle_admin':
+        return 'Use the Access level setting instead.'
+    if t_rank > v_rank:
+        return (f'{member.call_sign} is a {admin_level_label(member)}, above your access level, '
+                'so only a higher-level admin can change their record.')
+    if action in CLUB_ADMIN_ACTIONS and v_rank < ADMIN_LEVELS['club']:
+        return 'That needs Club Administrator access or higher.'
+    if action == 'reset_password' and t_rank > 0 and v_rank < ADMIN_LEVELS['club']:
+        return "Records Managers can reset regular members' passwords, not admins'."
+    if (action in ('toggle_active', 'delete_member') and admin_level_of(member) == 'system'
+            and member.is_active and active_system_admin_count() <= 1):
+        return f'{member.call_sign} is the last active System Administrator.'
+    return None
 
 
 def log_admin_action(action, target_member_call_sign=None, details=None):
@@ -1202,7 +1286,13 @@ def admin_member_detail(member_id):
     
     if request.method == 'POST':
         action = request.form.get('action')
-        
+
+        # ADDED 2026-11-06: access-level rules (nobody acts on someone above them, etc.)
+        blocked = member_action_block_reason(action, current_viewer(), member)
+        if blocked:
+            flash(blocked, 'danger')
+            return redirect(url_for('admin_member_detail', member_id=member_id))
+
         if action == 'update_info':
             before = log_snapshot(member, MEMBER_LOG_FIELDS)  # ADDED 2026-11-06: for the Activity Log
             # Update member information including call sign and join date
@@ -1352,6 +1442,29 @@ def admin_member_detail(member_id):
             else:
                 flash('No changes to the admin notes.', 'info')
 
+        # ADDED 2026-11-06: set the admin access level (replaces the Grant/Revoke Admin button)
+        elif action == 'set_access_level':
+            viewer = current_viewer()
+            new_level = (request.form.get('admin_level') or '').strip().lower()
+            old_level = admin_level_of(member)
+            if new_level not in ADMIN_LEVEL_LABELS:
+                flash('Unknown access level.', 'danger')
+            elif member.call_sign == session.get('call_sign'):
+                flash('You cannot change your own access level. Ask another admin.', 'danger')
+            elif ADMIN_LEVELS.get(new_level, 0) > admin_rank(viewer):
+                flash(f'You can only grant up to your own level ({admin_level_label(viewer)}).', 'danger')
+            elif old_level == 'system' and new_level != 'system' and member.is_active and active_system_admin_count() <= 1:
+                flash(f'{member.call_sign} is the last active System Administrator. Make someone else one first.', 'danger')
+            elif new_level == old_level:
+                flash('No change to the access level.', 'info')
+            else:
+                member.admin_level = new_level or None
+                member.is_admin = bool(new_level)
+                db.session.commit()
+                log_admin_action('Changed access level', member.call_sign,
+                                 f'Access level: {ADMIN_LEVEL_LABELS[old_level]} → {ADMIN_LEVEL_LABELS[new_level]}')
+                flash(f'{member.call_sign} is now: {ADMIN_LEVEL_LABELS[new_level]}.', 'success')
+
         elif action == 'delete_member':
             # Confirm deletion
             call_sign = member.call_sign
@@ -1396,6 +1509,7 @@ def admin_member_detail(member_id):
 
 @app.route('/admin/dues', methods=['GET', 'POST'])
 @admin_required
+@admin_level_required('club')  # ADDED 2026-11-06: Club Administrator and up
 def admin_dues():
     """Manage dues payments"""
     if request.method == 'POST':
@@ -1772,6 +1886,7 @@ def filtered_activity(args) -> tuple:
 
 @app.route('/admin/reports/activity')
 @admin_required
+@admin_level_required('club')  # ADDED 2026-11-06: Club Administrator and up
 def report_activity():
     """Activity Log: every logged admin action (and member self-edits), newest first"""
     rows, filters = filtered_activity(request.args)
@@ -1958,6 +2073,7 @@ def license_tried_file() -> Path:
 
 @app.route('/admin/map/fill-license', methods=['POST'])
 @admin_required
+@admin_level_required('club')  # ADDED 2026-11-06: Club Administrator and up
 def admin_fill_license_classes():
     """Look up blank license classes with the FCC (via callook.info / HamDB). Fills blanks only."""
     import time
@@ -2172,6 +2288,17 @@ def inject_viewer_is_admin():
         return {'viewer_is_admin': False}
     viewer = Member.query.filter_by(call_sign=session['call_sign']).first()
     return {'viewer_is_admin': bool(viewer and viewer.is_admin)}
+
+
+# ADDED 2026-11-06: access levels for templates (hide what a level can't use)
+@app.context_processor
+def inject_admin_levels():
+    return {'viewer_admin_rank': admin_rank(current_viewer()),
+            'admin_rank': admin_rank,
+            'admin_level_of': admin_level_of,
+            'admin_level_label': admin_level_label,
+            'ADMIN_LEVELS': ADMIN_LEVELS,
+            'ADMIN_LEVEL_LABELS': ADMIN_LEVEL_LABELS}
 
 
 # ADDED 2026-11-06: Club Information card and login page text, in one place

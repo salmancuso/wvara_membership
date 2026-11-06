@@ -68,6 +68,10 @@ class Member(db.Model):
     # ADDED 2026-11-06: admin-only legacy notes (old club database fields, history). Never shown to members.
     admin_notes = db.Column(db.Text)
 
+    # ADDED 2026-11-06: admin access level: None (no access), 'records', 'club' or 'system'.
+    # is_admin stays True for any level, so older checks keep working.
+    admin_level = db.Column(db.String(10))
+
     # Authentication
     password_hash = db.Column(db.String(200), nullable=False)
     password_is_temporary = db.Column(db.Boolean, default=True)

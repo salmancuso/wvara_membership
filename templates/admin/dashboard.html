@@ -286,11 +286,13 @@
                     <p class="text-muted">No recent payments.</p>
                 {% endif %}
                 
+                {% if viewer_admin_rank >= 2 %}{# CHANGED 2026-11-06: dues are Club Administrator and up #}
                 <div class="text-end mt-2">
                     <a href="{{ url_for('admin_dues') }}" class="btn btn-sm btn-primary">
                         <i class="bi bi-plus-circle"></i> Record Payment
                     </a>
                 </div>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -352,12 +354,14 @@
                             Manage Members
                         </a>
                     </div>
+                    {% if viewer_admin_rank >= 2 %}{# CHANGED 2026-11-06: dues are Club Administrator and up #}
                     <div class="col-md-3 mb-3">
                         <a href="{{ url_for('admin_dues') }}" class="btn btn-outline-success btn-lg w-100">
                             <i class="bi bi-credit-card"></i><br>
                             Record Dues
                         </a>
                     </div>
+                    {% endif %}
                     <div class="col-md-3 mb-3">
                         <a href="{{ url_for('admin_attendance') }}" class="btn btn-outline-info btn-lg w-100">
                             <i class="bi bi-calendar-check"></i><br>
