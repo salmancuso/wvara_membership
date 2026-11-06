@@ -1,0 +1,258 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - WVARA Membership{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <h2 class="mb-4">
+            <i class="bi bi-speedometer2"></i> Welcome, {{ member.first_name }}! 
+            <span class="badge bg-secondary">{{ member.call_sign }}</span>
+        </h2>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Profile Summary -->
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-person-circle"></i> Your Profile
+            </div>
+            <div class="card-body text-center">
+                {% if member.qrz_photo_url %}
+                    <img src="{{ member.qrz_photo_url }}" 
+                         alt="{{ member.call_sign }}" 
+                         class="profile-photo mb-3"
+                         style="width: 150px; height: 150px; object-fit: cover;">
+                {% else %}
+                    <div class="mb-3">
+                        <i class="bi bi-person-circle" style="font-size: 150px; color: var(--primary-color);"></i>
+                    </div>
+                {% endif %}
+                
+                <h5>{{ member.get_full_name() }}</h5>
+                <p class="text-muted mb-1">{{ member.call_sign }}</p>
+                {% if member.fcc_license_class %}
+                    <p class="text-muted mb-1">{{ member.fcc_license_class }}</p>
+                {% endif %}
+                <p class="text-muted">{{ member.membership_type }} Member</p>
+                
+                <div class="mb-3">
+                    <small class="text-muted">Member for {{ member.get_membership_duration() }}</small>
+                </div>
+                
+                <a href="{{ url_for('profile') }}" class="btn btn-primary btn-sm">
+                    <i class="bi bi-pencil"></i> Edit Profile
+                </a>
+                <a href="{{ url_for('change_password') }}" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-key"></i> Change Password
+                </a>
+                <!-- ADDED 2026-11-04: member reports and map -->
+                <div class="d-grid gap-2 mt-3">
+                    <a href="{{ url_for('member_reports') }}" class="btn btn-outline-primary btn-sm">
+                        <i class="bi bi-people"></i> Member Directory
+                    </a>
+                    <a href="{{ url_for('member_map') }}" class="btn btn-outline-primary btn-sm">
+                        <i class="bi bi-geo-alt"></i> Member Map
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Membership Status -->
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-credit-card"></i> Membership Status
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Dues Status ({{ current_year }})</h6>
+                        {# CHANGED 2026-11-04: uses the single dues status (lifetime / paid / grace / expired) #}
+                        {# ADDED 2026-11-05: family members are covered by their family head (first branch) #}
+                        {% if family_head %}
+                            {% if dues_state == 'lifetime' %}
+                                <div class="alert alert-success">
+                                    <i class="bi bi-infinity"></i> <strong>Lifetime Family Member</strong><br>
+                                    <small>Covered by {{ family_head.call_sign }}'s lifetime membership. No dues required. Thank you!</small>
+                                </div>
+                            {% elif dues_state == 'paid' %}
+                                <div class="alert alert-success">
+                                    <i class="bi bi-people-fill"></i> <strong>Covered</strong><br>
+                                    <small>You're covered by {{ family_head.call_sign }}'s family membership ({{ family_head.get_full_name() }}).</small>
+                                </div>
+                            {% elif dues_state == 'grace' %}
+                                <div class="alert alert-warning">
+                                    <i class="bi bi-hourglass-split"></i> <strong>Family Renewal Due</strong><br>
+                                    <small>{{ family_head.call_sign }}'s {{ current_year }} family dues are due. You're covered through the end of February.</small>
+                                </div>
+                            {% else %}
+                                <div class="alert alert-warning">
+                                    <i class="bi bi-exclamation-triangle-fill"></i> <strong>Family Dues Expired</strong><br>
+                                    <small>{{ family_head.call_sign }}'s family dues have expired. Please ask {{ family_head.call_sign }} to renew.</small>
+                                </div>
+                            {% endif %}
+                        {% elif dues_state == 'lifetime' %}
+                            <div class="alert alert-success">
+                                <i class="bi bi-infinity"></i> <strong>Lifetime Member</strong><br>
+                                <small>No annual dues required. Thank you!</small>
+                            </div>
+                        {% elif dues_state == 'grace' %}
+                            <div class="alert alert-warning">
+                                <i class="bi bi-hourglass-split"></i> <strong>Renewal Due</strong><br>
+                                {# CHANGED 2026-11-05: amount follows membership type #}
+                                <small>Your {{ current_year }} dues{% if pay_dues %} (${{ '%.0f'|format(pay_dues.amounts[pay_dues.choice]) }}){% endif %} are due. You're covered through the end of February.</small>
+                            </div>
+                        {% elif dues_status %}
+                            <div class="alert alert-success">
+                                <i class="bi bi-check-circle-fill"></i> <strong>Paid</strong><br>
+                                <small>
+                                    Payment Date: {{ dues_status.payment_date.strftime('%B %d, %Y') }}<br>
+                                    Amount: ${{ "%.2f"|format(dues_status.amount) }}
+                                </small>
+                            </div>
+                        {% else %}
+                            <div class="alert alert-warning">
+                                <i class="bi bi-exclamation-triangle-fill"></i> <strong>Not Paid</strong><br>
+                                {# CHANGED 2026-11-05: pay online instead of contacting the treasurer #}
+                                <small>Pay online with PayPal or a credit card below.</small>
+                            </div>
+                        {% endif %}
+                        {# ADDED 2026-11-05: show next year's dues when they're already paid #}
+                        {% if next_year_payment and dues_state != 'lifetime' and not family_head %}{# CHANGED 2026-11-05 #}
+                            <div class="alert alert-success">
+                                <i class="bi bi-calendar-check-fill"></i> <strong>{{ current_year + 1 }} Paid</strong><br>
+                                <small>
+                                    Payment Date: {{ next_year_payment.payment_date.strftime('%B %d, %Y') }}<br>
+                                    Amount: ${{ "%.2f"|format(next_year_payment.amount) }}<br>
+                                    You're covered through December 31, {{ current_year + 1 }}.
+                                </small>
+                            </div>
+                        {% endif %}
+                        {# ADDED 2026-11-05: Pay Dues button opens the lightbox #}
+                        {% if pay_dues and pay_dues.needs_payment %}
+                            <button type="button" class="btn btn-primary w-100 mb-3" data-bs-toggle="modal" data-bs-target="#payDuesModal">
+                                <i class="bi bi-credit-card"></i>
+                                {% if dues_state == 'paid' %}Renew for {{ current_year + 1 }}{% else %}Pay Dues{% endif %}
+                            </button>
+                        {% endif %}
+                        {# ADDED 2026-11-05: family heads see who their family dues cover #}
+                        {% if family_members %}
+                            <p class="small text-muted mb-0">
+                                <i class="bi bi-people"></i> Your family:
+                                {% for fm in family_members %}{{ fm.call_sign }} ({{ fm.first_name }}){% if not loop.last %}, {% endif %}{% endfor %}
+                            </p>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="col-md-6">
+                        <h6>Account Status</h6>
+                        {% if member.is_active %}
+                            <span class="badge bg-success badge-status">
+                                <i class="bi bi-check-circle"></i> Active
+                            </span>
+                        {% else %}
+                            <span class="badge bg-danger badge-status">
+                                <i class="bi bi-x-circle"></i> Inactive
+                            </span>
+                        {% endif %}
+                        
+                        {% if member.is_admin %}
+                            <span class="badge bg-primary badge-status">
+                                <i class="bi bi-shield-check"></i> Administrator
+                            </span>
+                        {% endif %}
+                        
+                        <div class="mt-3">
+                            <small class="text-muted">
+                                <i class="bi bi-calendar"></i> Joined: {{ member.join_date.strftime('%B %Y') }}
+                            </small>
+                        </div>
+                    </div>
+                </div>
+                
+                {% if current_roles %}
+                <hr>
+                <h6>Current Roles</h6>
+                <ul class="list-unstyled">
+                    {% for role in current_roles %}
+                        <li>
+                            <i class="bi bi-award-fill text-primary"></i> 
+                            <strong>{{ role.role_name }}</strong>
+                            <small class="text-muted">(since {{ role.start_date.strftime('%B %Y') }})</small>
+                        </li>
+                    {% endfor %}
+                </ul>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Recent Meeting Attendance -->
+        <div class="card mt-3">
+            <div class="card-header">
+                <i class="bi bi-calendar-check"></i> Recent Meeting Attendance
+            </div>
+            <div class="card-body">
+                {% if recent_meetings %}
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Meeting Date</th>
+                                <th>Attended</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for attendance in recent_meetings %}
+                                <tr>
+                                    <td>{{ attendance.meeting_date.strftime('%B %d, %Y') }}</td>
+                                    <td>
+                                        {% if attendance.attended %}
+                                            <i class="bi bi-check-circle-fill text-success"></i> Yes
+                                        {% else %}
+                                            <i class="bi bi-x-circle-fill text-danger"></i> No
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                {% else %}
+                    <p class="text-muted">No recent meeting attendance recorded.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-info-circle"></i> Club Information
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <h6><i class="bi bi-calendar-event"></i> Meetings</h6>
+                        <p>First Wednesday of each month<br>
+                        7:00 PM</p>
+                    </div>
+                    <div class="col-md-4">
+                        <h6><i class="bi bi-envelope"></i> Contact</h6>
+                        <p>For questions or concerns, contact:<br>
+                        President: KK6IK</p>
+                    </div>
+                    <div class="col-md-4">
+                        <h6><i class="bi bi-credit-card"></i> Dues</h6>
+                        <p>Annual dues are paid via PayPal<br>
+                        Contact treasurer for payment information</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,170 @@
+/* =====================================================================
+   WVARA Membership theme (ADDED 2026-11-04)
+   Matches www.wvara.org: navy frame, Inter font, red buttons,
+   peach "eyebrow" labels, rounded cards. Work area stays light so
+   long member lists are easy to read.
+   Loaded AFTER the original styles in base.html, so it only overrides.
+   ===================================================================== */
+
+:root {
+    /* Colors taken from wvara.org/assets/css/main.css */
+    --wv-bg: #0b1220;          /* site background navy */
+    --wv-bg-soft: #111b2f;     /* lighter navy */
+    --wv-footer: #070b14;      /* footer navy */
+    --wv-text: #f7fafc;        /* text on navy */
+    --wv-muted: #cbd5e1;       /* muted text on navy */
+    --wv-card-text: #172033;   /* text on white cards */
+    --wv-slate: #526174;       /* secondary text */
+    --wv-red: #d71920;         /* primary buttons (Donation button) */
+    --wv-red-dark: #b3141a;
+    --wv-orange: #f36f21;      /* accent */
+    --wv-peach: #ffbf8e;       /* eyebrow labels */
+    --wv-blue: #2b73ff;        /* cool accent / links */
+    --wv-work-bg: #eef1f6;     /* light work area */
+    --wv-radius: 18px;
+    --wv-radius-sm: 12px;
+    --wv-shadow: 0 10px 30px rgba(11, 18, 32, 0.08);
+
+    /* Feed the theme into Bootstrap */
+    --bs-font-sans-serif: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+    --bs-body-color: var(--wv-card-text);
+    --bs-primary: #111b2f;
+    --bs-primary-rgb: 17, 27, 47;
+    --bs-link-color: var(--wv-blue);
+    --bs-link-color-rgb: 43, 115, 255;
+    --bs-link-hover-color: #1d5ad6;
+    --bs-border-radius: 10px;
+    --primary-color: #111b2f;  /* old variable, still used by a few templates */
+}
+
+body {
+    font-family: var(--bs-font-sans-serif);
+    background-color: var(--wv-work-bg);
+    color: var(--wv-card-text);
+    -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4, h5, h6 {
+    color: var(--wv-card-text);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+}
+
+/* ---------- Navigation (navy, like the site header) ---------- */
+.navbar {
+    background-color: rgba(11, 18, 32, 0.97) !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
+    padding-top: .6rem;
+    padding-bottom: .6rem;
+}
+.navbar-brand { display: flex; align-items: center; gap: .75rem; }
+.navbar-brand img.wv-logo { height: 38px; width: auto; }
+.wv-eyebrow {
+    color: var(--wv-peach);
+    font-size: .72rem;
+    font-weight: 900;
+    letter-spacing: .18em;
+    text-transform: uppercase;
+}
+.navbar-dark .nav-link {
+    color: var(--wv-text) !important;
+    font-weight: 700;
+}
+.navbar-dark .nav-link:hover,
+.navbar-dark .nav-link:focus { color: var(--wv-peach) !important; }
+.navbar-toggler {
+    border: 0;
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: var(--wv-radius-sm);
+    padding: .45rem .6rem;
+}
+.navbar .dropdown-menu {
+    background: var(--wv-bg-soft);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: var(--wv-radius-sm);
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.35);
+}
+.navbar .dropdown-item { color: var(--wv-text); font-weight: 600; }
+.navbar .dropdown-item:hover,
+.navbar .dropdown-item:focus { background: rgba(255, 255, 255, 0.08); color: var(--wv-peach); }
+.navbar .dropdown-divider { border-color: rgba(255, 255, 255, 0.12); }
+
+/* ---------- Cards ---------- */
+.card {
+    border: 1px solid rgba(23, 32, 51, 0.06);
+    border-radius: var(--wv-radius);
+    box-shadow: var(--wv-shadow);
+    overflow: hidden;           /* rounds the header corners */
+}
+.card-header {
+    background-color: var(--wv-bg-soft);
+    color: var(--wv-text);
+    font-weight: 700;
+    padding: .85rem 1.1rem;
+}
+/* stat tiles and colored headers keep their Bootstrap colors */
+.card.text-white { border: 0; height: 100%; margin-bottom: 0; }
+/* dark text on the yellow tile so it is readable */
+.card.text-white.bg-warning,
+.card.text-white.bg-warning .card-title,
+.card.text-white.bg-warning small { color: var(--wv-card-text) !important; }
+.card-header.bg-danger, .card-header.bg-warning, .card-header.bg-success { color: #fff; }
+.card-header.bg-warning { color: var(--wv-card-text); }
+
+/* ---------- Buttons (red primary like the site's Donation button) ---------- */
+.btn { border-radius: var(--wv-radius-sm); font-weight: 700; }
+.btn-primary {
+    background-color: var(--wv-red);
+    border-color: var(--wv-red);
+    color: #fff;
+}
+.btn-primary:hover, .btn-primary:focus, .btn-primary:active {
+    background-color: var(--wv-red-dark) !important;
+    border-color: var(--wv-red-dark) !important;
+    color: #fff;
+}
+.btn-outline-primary { color: var(--wv-red); border-color: var(--wv-red); }
+.btn-outline-primary:hover { background-color: var(--wv-red); border-color: var(--wv-red); color: #fff; }
+/* ADDED 2026-11-05: selected choice buttons (Pay Dues lightbox) */
+.btn-check:checked + .btn-outline-primary,
+.btn-check:active + .btn-outline-primary { background-color: var(--wv-red); border-color: var(--wv-red); color: #fff; }
+.btn-secondary { background-color: var(--wv-slate); border-color: var(--wv-slate); }
+.btn-secondary:hover { background-color: #3f4b5a; border-color: #3f4b5a; }
+
+/* ---------- Forms ---------- */
+.form-control, .form-select { border-radius: 10px; }
+.form-control:focus, .form-select:focus {
+    border-color: var(--wv-orange);
+    box-shadow: 0 0 0 .2rem rgba(243, 111, 33, 0.2);
+}
+.form-check-input:checked { background-color: var(--wv-red); border-color: var(--wv-red); }
+
+/* ---------- Tables ---------- */
+.table > thead th {
+    color: var(--wv-slate);
+    font-size: .78rem;
+    font-weight: 800;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+    border-bottom-width: 2px;
+}
+.table-striped tbody tr:nth-of-type(odd) { background-color: rgba(11, 18, 32, 0.025); }
+
+/* ---------- Pagination ---------- */
+.pagination .page-link { color: var(--wv-card-text); }
+.pagination .page-item.active .page-link { background-color: var(--wv-red); border-color: var(--wv-red); color: #fff; }
+
+/* ---------- Misc ---------- */
+.badge { border-radius: 8px; }
+.alert { border-radius: var(--wv-radius-sm); }
+.profile-photo { border-color: var(--wv-orange); }
+
+/* ---------- Footer (navy, like the site footer) ---------- */
+.footer {
+    background-color: var(--wv-footer);
+    color: var(--wv-muted);
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+.footer a { color: var(--wv-peach); }
+.footer .wv-eyebrow { display: block; margin-bottom: .35rem; }

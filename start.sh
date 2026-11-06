@@ -21,7 +21,8 @@ echo "Installing dependencies..."
 pip install -q -r requirements.txt
 
 # Check if database exists
-if [ ! -f "WVARA_membership.db" ]; then
+# CHANGED 2026-11-04: the database lives in instance/ (matches app.py)
+if [ ! -f "instance/wvara_membership.db" ]; then
     echo ""
     echo "Database not found. Initializing database..."
     echo ""

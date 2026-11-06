@@ -11,6 +11,59 @@
     </div>
 </div>
 
+<!-- ADDED 2026-11-05: PayPal payments members started, waiting for the treasurer -->
+{% if pending_notices %}
+<div class="card border-warning mb-4">
+    <div class="card-header bg-warning">
+        <i class="bi bi-paypal"></i> PayPal Payments to Confirm ({{ pending_notices|length }})
+    </div>
+    <div class="card-body">
+        <p class="small text-muted">
+            These members started a PayPal payment from the app. Check each one against PayPal's payment email,
+            then click <strong>Mark Paid</strong>. Use <strong>Dismiss</strong> if the payment never came through.
+        </p>
+        <div class="table-responsive">
+            <table class="table table-sm align-middle mb-0">
+                <thead>
+                    <tr>
+                        <th>Started</th><th>Call Sign</th><th>Name / Email</th><th>For</th>
+                        <th>Type</th><th class="text-end">Amount</th><th>Family Members</th><th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for n in pending_notices %}
+                    <tr>
+                        <td class="text-nowrap">{{ (n.created_at|pacific).strftime('%m/%d/%Y') }}</td>{# CHANGED 2026-11-05: Pacific time #}
+                        <td><strong>{{ n.call_sign or n.member.call_sign }}</strong></td>
+                        <td>{{ n.name }}<br><small class="text-muted">{{ n.email }}</small></td>
+                        <td><strong>{{ n.dues_year }}</strong></td>
+                        <td>{{ n.membership_choice }}</td>
+                        <td class="text-end">${{ "%.2f"|format(n.amount) }}</td>
+                        <td><small>{{ n.family_members or '-' }}</small></td>
+                        <td class="text-nowrap">
+                            <form method="POST" action="{{ url_for('admin_dues') }}" class="d-inline">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="action" value="confirm_notice">
+                                <input type="hidden" name="notice_id" value="{{ n.id }}">
+                                <button type="submit" class="btn btn-sm btn-success"><i class="bi bi-check-circle"></i> Mark Paid</button>
+                            </form>
+                            <form method="POST" action="{{ url_for('admin_dues') }}" class="d-inline"
+                                  onsubmit="return confirm('Dismiss this PayPal notice? Use this only if the payment never came through.');">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="action" value="dismiss_notice">
+                                <input type="hidden" name="notice_id" value="{{ n.id }}">
+                                <button type="submit" class="btn btn-sm btn-outline-secondary">Dismiss</button>
+                            </form>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <div class="row">
     <!-- Left Panel: Record Payment Form -->
     <div class="col-md-4">
@@ -20,6 +73,7 @@
             </div>
             <div class="card-body">
                 <form method="POST" action="{{ url_for('admin_dues') }}" id="paymentForm">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="hidden" name="action" id="formAction" value="add">
                     <input type="hidden" name="payment_id" id="paymentId" value="">
                     
@@ -28,7 +82,7 @@
                         <select class="form-select" id="member_id" name="member_id" required>
                             <option value="">Select a member...</option>
                             {% for member in members %}
-                                <option value="{{ member.id }}">
+                                <option value="{{ member.id }}" data-type="{{ member.membership_type }}">
                                     {{ member.call_sign }} - {{ member.get_full_name() }}
                                 </option>
                             {% endfor %}
@@ -55,8 +109,8 @@
                                    class="form-control" 
                                    id="amount" 
                                    name="amount" 
-                                   step="0.01" 
-                                   value="25.00" 
+                                   step="0.01"
+                                   value="{{ '%.2f'|format(dues_amount) }}"
                                    required>
                         </div>
                     </div>
@@ -88,6 +142,10 @@
                         <button type="submit" class="btn btn-primary" id="submitBtn">
                             <i class="bi bi-check-circle"></i> <span id="submitText">Record Payment</span>
                         </button>
+                        <!-- ADDED 2026-11-04: delete button, only shown while editing a payment -->
+                        <button type="button" class="btn btn-outline-danger" id="deleteBtn" style="display: none;" onclick="deletePayment()">
+                            <i class="bi bi-trash"></i> Delete Payment
+                        </button>
                         <button type="button" class="btn btn-secondary" id="cancelBtn" style="display: none;" onclick="resetForm()">
                             <i class="bi bi-x-circle"></i> Cancel Edit
                         </button>
@@ -105,36 +163,53 @@
             </div>
             <div class="card-body">
                 <div class="table-responsive">
-                    <table class="table table-hover table-sm">
+                    {# CHANGED 2026-11-06: click a column header to sort; starts with Call Sign A to Z #}
+                    <style>
+                        th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+                        th.sortable:hover { color: var(--bs-primary); }
+                        th.sortable .sort-icon { opacity: .35; font-size: .8em; }
+                        th.sortable.sorted .sort-icon { opacity: 1; }
+                    </style>
+                    {% set status_order = {'expired': 0, 'grace': 1, 'paid': 2, 'lifetime': 3} %}
+                    <table class="table table-hover table-sm" id="duesTable">
                         <thead>
                             <tr>
-                                <th>Call Sign</th>
-                                <th>Name</th>
-                                <th>Type</th>
-                                <th>Year</th>
-                                <th>Status</th>
-                                <th>Date</th>
-                                <th>Amount</th>
+                                <th class="sortable sorted" data-col="0" data-type="text">Call Sign <i class="bi bi-sort-up sort-icon"></i></th>
+                                <th class="sortable" data-col="1" data-type="text">Name <i class="bi bi-arrow-down-up sort-icon"></i></th>
+                                <th class="sortable" data-col="2" data-type="text">Type <i class="bi bi-arrow-down-up sort-icon"></i></th>
+                                <th class="sortable" data-col="3" data-type="num">Year <i class="bi bi-arrow-down-up sort-icon"></i></th>
+                                <th class="sortable" data-col="4" data-type="num">Status <i class="bi bi-arrow-down-up sort-icon"></i></th>
+                                <th class="sortable" data-col="5" data-type="text">Date <i class="bi bi-arrow-down-up sort-icon"></i></th>
+                                <th class="sortable" data-col="6" data-type="num">Amount <i class="bi bi-arrow-down-up sort-icon"></i></th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for data in member_payment_data %}
-                                <tr>
-                                    <td><strong>{{ data.member.call_sign }}</strong></td>
-                                    <td>{{ data.member.get_full_name() }}</td>
-                                    <td><small>{{ data.member.membership_type }}</small></td>
-                                    <td>
+                                <tr class="dues-main-row">
+                                    <td data-sort="{{ data.member.call_sign }}"><strong>{{ data.member.call_sign }}</strong></td>
+                                    <td data-sort="{{ data.member.last_name }} {{ data.member.first_name }}">{{ data.member.get_full_name() }}</td>
+                                    <td data-sort="{{ data.member.membership_type }}"><small>{{ data.member.membership_type }}</small></td>
+                                    <td data-sort="{{ data.payment.year if data.payment else 0 }}">
                                         {% if data.payment %}
                                             {{ data.payment.year }}
                                         {% else %}
                                             -
                                         {% endif %}
                                     </td>
-                                    <td>
-                                        {% if data.status == 'paid' %}
+                                    <td data-sort="{{ status_order.get(data.status, 0) }}">
+                                        {# CHANGED 2026-11-04: lifetime / paid / grace / expired #}
+                                        {% if data.status == 'lifetime' %}
+                                            <span class="badge bg-primary">
+                                                <i class="bi bi-infinity"></i> Lifetime
+                                            </span>
+                                        {% elif data.status == 'paid' %}
                                             <span class="badge bg-success">
                                                 <i class="bi bi-check-circle"></i> Paid
+                                            </span>
+                                        {% elif data.status == 'grace' %}
+                                            <span class="badge bg-warning text-dark">
+                                                <i class="bi bi-hourglass-split"></i> Grace Period
                                             </span>
                                         {% else %}
                                             <span class="badge bg-danger">
@@ -142,44 +217,82 @@
                                             </span>
                                         {% endif %}
                                     </td>
-                                    <td>
+                                    <td data-sort="{{ data.payment.payment_date.strftime('%Y-%m-%d') if data.payment else '' }}">
                                         {% if data.payment %}
                                             {{ data.payment.payment_date.strftime('%m/%d/%Y') }}
                                         {% else %}
                                             -
                                         {% endif %}
                                     </td>
-                                    <td>
+                                    <td data-sort="{{ data.payment.amount if data.payment else -1 }}">
                                         {% if data.payment %}
                                             ${{ "%.2f"|format(data.payment.amount) }}
                                         {% else %}
                                             -
                                         {% endif %}
                                     </td>
-                                    <td>
+                                    <td class="text-nowrap">
+                                        {# CHANGED 2026-11-04: values travel in data-* attributes so names/notes
+                                           with apostrophes (O'Brien) no longer break the buttons #}
+                                        {% if data.status != 'lifetime' and not data.has_current_year %}
+                                            <button type="button" class="btn btn-sm btn-primary"
+                                                    data-member-id="{{ data.member.id }}"
+                                                    onclick="addPaymentFromButton(this)">
+                                                <i class="bi bi-plus"></i> Add {{ current_year }}
+                                            </button>
+                                        {% endif %}
                                         {% if data.payment %}
-                                            <button type="button" class="btn btn-sm btn-warning" 
-                                                    onclick="editPayment(
-                                                        '{{ data.payment.id }}',
-                                                        '{{ data.member.id }}',
-                                                        '{{ data.member.call_sign }}',
-                                                        '{{ data.member.get_full_name() }}',
-                                                        '{{ data.payment.year }}',
-                                                        '{{ data.payment.amount }}',
-                                                        '{{ data.payment.payment_date.strftime('%Y-%m-%d') }}',
-                                                        '{{ data.payment.payment_method }}',
-                                                        '{{ data.payment.notes or '' }}'
-                                                    )">
+                                            <button type="button" class="btn btn-sm btn-warning"
+                                                    data-payment-id="{{ data.payment.id }}"
+                                                    data-member-id="{{ data.member.id }}"
+                                                    data-year="{{ data.payment.year }}"
+                                                    data-amount="{{ data.payment.amount }}"
+                                                    data-payment-date="{{ data.payment.payment_date.strftime('%Y-%m-%d') }}"
+                                                    data-method="{{ data.payment.payment_method }}"
+                                                    data-notes="{{ data.payment.notes or '' }}"
+                                                    onclick="editPaymentFromButton(this)">
                                                 <i class="bi bi-pencil"></i> Edit
                                             </button>
-                                        {% else %}
-                                            <button type="button" class="btn btn-sm btn-primary" 
-                                                    onclick="addPaymentFor('{{ data.member.id }}', '{{ data.member.call_sign }}', '{{ data.member.get_full_name() }}')">
-                                                <i class="bi bi-plus"></i> Add
+                                        {% endif %}
+                                        {% if data.history|length > 1 %}
+                                            <button type="button" class="btn btn-sm btn-outline-secondary"
+                                                    data-bs-toggle="collapse" data-bs-target="#history{{ data.member.id }}">
+                                                <i class="bi bi-clock-history"></i> History ({{ data.history|length }})
                                             </button>
                                         {% endif %}
                                     </td>
                                 </tr>
+                                {# ADDED 2026-11-04: every payment for this member, each one editable #}
+                                {% if data.history|length > 1 %}
+                                <tr class="collapse" id="history{{ data.member.id }}">
+                                    <td colspan="8" class="bg-light">
+                                        <table class="table table-sm mb-0">
+                                            {% for p in data.history %}
+                                            <tr>
+                                                <td>{{ p.year }}</td>
+                                                <td>{{ p.payment_date.strftime('%m/%d/%Y') }}</td>
+                                                <td>${{ "%.2f"|format(p.amount) }}</td>
+                                                <td>{{ p.payment_method }}</td>
+                                                <td><small>{{ p.notes or '' }}</small></td>
+                                                <td class="text-end">
+                                                    <button type="button" class="btn btn-sm btn-outline-warning"
+                                                            data-payment-id="{{ p.id }}"
+                                                            data-member-id="{{ data.member.id }}"
+                                                            data-year="{{ p.year }}"
+                                                            data-amount="{{ p.amount }}"
+                                                            data-payment-date="{{ p.payment_date.strftime('%Y-%m-%d') }}"
+                                                            data-method="{{ p.payment_method }}"
+                                                            data-notes="{{ p.notes or '' }}"
+                                                            onclick="editPaymentFromButton(this)">
+                                                        <i class="bi bi-pencil"></i> Edit
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                            {% endfor %}
+                                        </table>
+                                    </td>
+                                </tr>
+                                {% endif %}
                             {% endfor %}
                         </tbody>
                     </table>
@@ -211,6 +324,7 @@ function editPayment(paymentId, memberId, callSign, name, year, amount, paymentD
     // Update button text
     document.getElementById('submitText').textContent = 'Update Payment';
     document.getElementById('cancelBtn').style.display = 'block';
+    document.getElementById('deleteBtn').style.display = 'block';  // ADDED 2026-11-04
     
     // Scroll to form
     document.getElementById('paymentForm').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -237,17 +351,94 @@ function resetForm() {
     document.getElementById('payment_date').value = today;
     document.getElementById('submitText').textContent = 'Record Payment';
     document.getElementById('cancelBtn').style.display = 'none';
+    document.getElementById('deleteBtn').style.display = 'none';  // ADDED 2026-11-04
 }
 
-// Intercept form submission to add delete option when editing
+// ADDED 2026-11-04: read values from data-* attributes (safe for apostrophes and quotes)
+function editPaymentFromButton(btn) {
+    const d = btn.dataset;
+    editPayment(d.paymentId, d.memberId, '', '', d.year, d.amount, d.paymentDate, d.method, d.notes);
+}
+
+function addPaymentFromButton(btn) {
+    addPaymentFor(btn.dataset.memberId, '', '');
+    setAmountForMember();  // ADDED 2026-11-05
+}
+
+// ADDED 2026-11-05: Family dues default to $25, everyone else $15 (new payments only)
+const DUES_BY_TYPE = {{ dues_by_type|tojson }};
+function setAmountForMember() {
+    if (document.getElementById('formAction').value !== 'add') return;
+    const option = document.getElementById('member_id').selectedOptions[0];
+    const type = option ? (option.dataset.type || '') : '';
+    const amount = DUES_BY_TYPE[type] || {{ dues_amount|tojson }};
+    document.getElementById('amount').value = Number(amount).toFixed(2);
+}
+document.getElementById('member_id').addEventListener('change', setAmountForMember);
+
+// ADDED 2026-11-04: delete the payment currently loaded in the form
+function deletePayment() {
+    if (!confirm('Permanently DELETE this dues payment?\n\nThis cannot be undone.')) {
+        return;
+    }
+    document.getElementById('formAction').value = 'delete';
+    document.getElementById('paymentForm').submit();
+}
+
+// CHANGED 2026-11-04: clear confirm wording now that Delete has its own button
 document.getElementById('paymentForm').addEventListener('submit', function(e) {
     const action = document.getElementById('formAction').value;
     if (action === 'edit') {
-        const confirmMsg = 'Do you want to UPDATE this payment, or DELETE it?\n\nClick OK to UPDATE, or Cancel to stay on this page.';
-        if (!confirm(confirmMsg)) {
+        if (!confirm('Save the changes to this payment?')) {
             e.preventDefault();
         }
     }
 });
+</script>
+
+<!-- ADDED 2026-11-06: click-to-sort columns on "Dues Status - All Members"; each member's History row moves with it -->
+<script>
+(function () {
+    const table = document.getElementById('duesTable');
+    if (!table) return;
+    const tbody = table.querySelector('tbody');
+    // Pair each member row with the History row right after it (if any)
+    const groups = Array.from(tbody.querySelectorAll('tr.dues-main-row')).map((row) => {
+        const next = row.nextElementSibling;
+        const history = (next && next.classList.contains('collapse')) ? next : null;
+        return { row, history };
+    });
+    let sortCol = 0;
+    let sortDir = 1;   // starts Call Sign A to Z (the server sends it that way)
+
+    table.querySelectorAll('th.sortable').forEach((th) => {
+        th.addEventListener('click', () => {
+            const col = parseInt(th.dataset.col, 10);
+            const numeric = th.dataset.type === 'num';
+            sortDir = (sortCol === col) ? -sortDir : 1;
+            sortCol = col;
+            groups.sort((a, b) => {
+                const x = a.row.cells[col].dataset.sort ?? a.row.cells[col].textContent.trim();
+                const y = b.row.cells[col].dataset.sort ?? b.row.cells[col].textContent.trim();
+                let result = numeric ? (parseFloat(x) - parseFloat(y))
+                                     : x.localeCompare(y, undefined, { sensitivity: 'base' });
+                if (result === 0) {   // ties fall back to call sign A to Z
+                    result = a.row.cells[0].dataset.sort.localeCompare(b.row.cells[0].dataset.sort) * sortDir;
+                }
+                return result * sortDir;
+            });
+            groups.forEach((g) => {
+                tbody.appendChild(g.row);
+                if (g.history) tbody.appendChild(g.history);
+            });
+            table.querySelectorAll('th.sortable').forEach((h) => {
+                h.classList.remove('sorted');
+                h.querySelector('.sort-icon').className = 'bi bi-arrow-down-up sort-icon';
+            });
+            th.classList.add('sorted');
+            th.querySelector('.sort-icon').className = 'bi ' + (sortDir === 1 ? 'bi-sort-up' : 'bi-sort-down') + ' sort-icon';
+        });
+    });
+})();
 </script>
 {% endblock %}

@@ -1,0 +1,206 @@
+{% extends "base.html" %}
+
+{% block title %}Add Member - WVARA Membership{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <h2 class="mb-4">
+            <i class="bi bi-person-plus"></i> Add New Member
+        </h2>
+        <a href="{{ url_for('admin_members') }}" class="btn btn-secondary mb-3">
+            <i class="bi bi-arrow-left"></i> Back to Members List
+        </a>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-info-circle"></i> New Member Information
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('admin_add_member') }}">
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i> Initial password will be set to the member's call sign.
+                        They will be required to change it on first login.
+                    </div>
+                    
+                    <h5 class="mb-3">Basic Information</h5>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="call_sign" class="form-label">Call Sign <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="call_sign" name="call_sign" 
+                                   required style="text-transform: uppercase;" autofocus>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="fcc_license_class" class="form-label">FCC License Class</label>
+                            <select class="form-select" id="fcc_license_class" name="fcc_license_class">
+                                <option value="">Select license class</option>
+                                <option value="Technician">Technician</option>
+                                <option value="General">General</option>
+                                <option value="Amateur Extra">Amateur Extra</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="first_name" class="form-label">First Name <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="first_name" name="first_name" required>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="last_name" class="form-label">Last Name <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="last_name" name="last_name" required>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="email" class="form-label">Email <span class="text-danger">*</span></label>
+                            <input type="email" class="form-control" id="email" name="email" required>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="phone" class="form-label">Phone</label>
+                            <input type="tel" class="form-control" id="phone" name="phone" 
+                                   placeholder="(123) 456-7890">
+                        </div>
+                    </div>
+                    
+                    <h5 class="mb-3 mt-4">Address</h5>
+                    
+                    <div class="mb-3">
+                        <label for="address" class="form-label">Street Address</label>
+                        <input type="text" class="form-control" id="address" name="address" 
+                               placeholder="123 Main Street">
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-5 mb-3">
+                            <label for="city" class="form-label">City</label>
+                            <input type="text" class="form-control" id="city" name="city">
+                        </div>
+                        
+                        <div class="col-md-3 mb-3">
+                            <label for="state" class="form-label">State</label>
+                            <input type="text" class="form-control" id="state" name="state" 
+                                   placeholder="CA" maxlength="2" style="text-transform: uppercase;">
+                        </div>
+                        
+                        <div class="col-md-4 mb-3">
+                            <label for="zip_code" class="form-label">ZIP Code</label>
+                            <input type="text" class="form-control" id="zip_code" name="zip_code" 
+                                   placeholder="12345">
+                        </div>
+                    </div>
+                    
+                    <h5 class="mb-3 mt-4">Membership Details</h5>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label for="membership_type" class="form-label">Membership Type <span class="text-danger">*</span></label>
+                            <select class="form-select" id="membership_type" name="membership_type" required>
+                                <option value="Individual">Individual</option>
+                                <option value="Family">Family</option>
+                                <option value="Lifetime">Lifetime</option>
+                            </select>
+                        </div>
+                        
+                        <div class="col-md-6 mb-3">
+                            <label for="join_date" class="form-label">Join Date <span class="text-danger">*</span></label>
+                            <input type="date" class="form-control" id="join_date" name="join_date" 
+                                   value="{{ today }}" required>
+                        </div>
+                    </div>
+                    
+                    <h5 class="mb-3 mt-4">Emergency Contact</h5>
+                    
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="emergency_contact_name" class="form-label">Name</label>
+                            <input type="text" class="form-control" id="emergency_contact_name" 
+                                   name="emergency_contact_name">
+                        </div>
+                        
+                        <div class="col-md-4 mb-3">
+                            <label for="emergency_contact_phone" class="form-label">Phone</label>
+                            <input type="tel" class="form-control" id="emergency_contact_phone" 
+                                   name="emergency_contact_phone">
+                        </div>
+                        
+                        <div class="col-md-4 mb-3">
+                            <label for="emergency_contact_relationship" class="form-label">Relationship</label>
+                            <input type="text" class="form-control" id="emergency_contact_relationship" 
+                                   name="emergency_contact_relationship" 
+                                   placeholder="Spouse, Parent, Sibling, Friend">
+                        </div>
+                    </div>
+                    
+                    <hr class="my-4">
+                    
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a href="{{ url_for('admin_members') }}" class="btn btn-secondary">
+                            <i class="bi bi-x-circle"></i> Cancel
+                        </a>
+                        <button type="submit" class="btn btn-success btn-lg">
+                            <i class="bi bi-check-circle"></i> Add Member
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-info-circle"></i> Important Notes
+            </div>
+            <div class="card-body">
+                <p><strong>Initial Password:</strong></p>
+                <p class="small">The new member's password will be set to their call sign. They will be required to change it on first login.</p>
+                
+                <hr>
+                
+                <p><strong>Required Fields:</strong></p>
+                <ul class="small">
+                    <li>Call Sign</li>
+                    <li>First & Last Name</li>
+                    <li>Email Address</li>
+                    <li>Membership Type</li>
+                    <li>Join Date</li>
+                </ul>
+                
+                <hr>
+                
+                <p><strong>After Adding:</strong></p>
+                <p class="small">
+                    You can:
+                    <ul class="small">
+                        <li>Record their dues payment</li>
+                        <li>Assign leadership roles</li>
+                        <li>Grant admin access if needed</li>
+                        <li>Update their QRZ photo</li>
+                    </ul>
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Auto-uppercase call sign and state
+    document.getElementById('call_sign').addEventListener('input', function(e) {
+        e.target.value = e.target.value.toUpperCase();
+    });
+    
+    document.getElementById('state').addEventListener('input', function(e) {
+        e.target.value = e.target.value.toUpperCase();
+    });
+</script>
+{% endblock %}

@@ -89,14 +89,23 @@
         }
     </style>
     
+    <!-- ADDED 2026-11-04: WVARA site theme (Inter font + wvara.org colors), loaded after the styles above -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/wvara-theme.css') }}">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/wvara-logo.png') }}">
+
     {% block extra_css %}{% endblock %}
 </head>
 <body>
     <!-- Navigation -->
     <nav class="navbar navbar-expand-lg navbar-dark">
         <div class="container">
+            <!-- CHANGED 2026-11-04: club logo + peach "Membership" label like wvara.org -->
             <a class="navbar-brand" href="{{ url_for('index') }}">
-                <i class="bi bi-broadcast"></i> WVARA Membership
+                <img src="{{ url_for('static', filename='img/wvara-logo.png') }}" alt="West Valley Amateur Radio Association" class="wv-logo">
+                <span class="wv-eyebrow d-none d-sm-inline">Membership</span>
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
                 <span class="navbar-toggler-icon"></span>
@@ -114,7 +123,23 @@
                                 <i class="bi bi-person-circle"></i> Profile
                             </a>
                         </li>
-                        {% if session.is_admin %}
+                        <!-- ADDED 2026-11-04: Members menu for everyone who is logged in -->
+                        <li class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle" href="#" id="membersDropdown" role="button" data-bs-toggle="dropdown">
+                                <i class="bi bi-people-fill"></i> Members
+                            </a>
+                            <ul class="dropdown-menu">
+                                <li><a class="dropdown-item" href="{{ url_for('member_reports') }}">Reports &amp; Directory</a></li>
+                                <li><a class="dropdown-item" href="{{ url_for('member_map') }}">Member Map</a></li>
+                                {% if pay_dues %}
+                                <!-- ADDED 2026-11-05 -->
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#payDuesModal">Pay Dues</a></li>
+                                {% endif %}
+                            </ul>
+                        </li>
+                        {# CHANGED 2026-11-04: live admin check instead of the value saved at login #}
+                        {% if viewer_is_admin %}
                             <li class="nav-item dropdown">
                                 <a class="nav-link dropdown-toggle" href="#" id="adminDropdown" role="button" data-bs-toggle="dropdown">
                                     <i class="bi bi-gear-fill"></i> Admin
@@ -127,6 +152,8 @@
                                     <li><a class="dropdown-item" href="{{ url_for('admin_roles') }}">Roles</a></li>
                                     <li><hr class="dropdown-divider"></li>
                                     <li><a class="dropdown-item" href="{{ url_for('admin_reports') }}">Reports</a></li>
+                                    <!-- ADDED 2026-11-04 -->
+                                    <li><a class="dropdown-item" href="{{ url_for('admin_member_map') }}">Member Map</a></li>
                                 </ul>
                             </li>
                         {% endif %}
@@ -176,6 +203,8 @@
     <!-- Footer -->
     <footer class="footer mt-auto">
         <div class="container text-center">
+            <!-- ADDED 2026-11-04 -->
+            <span class="wv-eyebrow">Repeaters. Allstar. Community.</span>
             <p class="mb-0">&copy; {{ current_year or 2025 }} West Valley Amateur Radio Association (WVARA)</p>
             <p class="mb-0 small">Promoting Amateur Radio in the West Valley since 1968</p>
             <p class="mb-0 small">Developed by Sal Mancuso, W6SAL</p>
@@ -186,7 +215,10 @@
 
     <!-- Bootstrap Bundle with Popper -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    
+
+    <!-- ADDED 2026-11-05: Pay Dues lightbox (only for logged-in, non-Lifetime members) -->
+    {% include '_pay_dues_modal.html' %}
+
     {% block extra_js %}{% endblock %}
 </body>
 </html>

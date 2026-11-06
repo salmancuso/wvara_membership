@@ -12,54 +12,195 @@
 </div>
 
 <!-- Statistics Cards -->
+<!-- ADDED 2026-11-04: hover feedback so the tiles feel clickable -->
+<style>
+    .row.mb-4 .card:has(.stretched-link) { transition: transform .1s ease, box-shadow .1s ease; }
+    .row.mb-4 .card:has(.stretched-link):hover { transform: translateY(-2px); box-shadow: 0 .5rem 1rem rgba(0,0,0,.15); }
+</style>
 <div class="row mb-4">
-    <div class="col-md-3">
+    <div class="col-6 col-md mb-3"> <!-- CHANGED 2026-11-04: 5 equal tiles, 2-up on phones -->
         <div class="card text-white bg-primary">
             <div class="card-body">
                 <h3 class="card-title">{{ total_members }}</h3>
                 <p class="card-text">
                     <i class="bi bi-people-fill"></i> Total Members
+                    <!-- ADDED 2026-11-04: whole tile links to the matching member list -->
+                    <a href="{{ url_for('admin_members', status='everyone') }}" class="stretched-link" aria-label="View list"></a>
                 </p>
             </div>
         </div>
     </div>
     
-    <div class="col-md-3">
+    <div class="col-6 col-md mb-3"> <!-- CHANGED 2026-11-04: 5 equal tiles, 2-up on phones -->
         <div class="card text-white bg-success">
             <div class="card-body">
                 <h3 class="card-title">{{ truly_active_members }}</h3>
                 <p class="card-text">
                     <i class="bi bi-check-circle-fill"></i> Active Members
+                    <!-- ADDED 2026-11-04: whole tile links to the matching member list -->
+                    <a href="{{ url_for('admin_members', status='active') }}" class="stretched-link" aria-label="View list"></a>
                 </p>
                 <small class="text-white">Dues paid + activity in last 6 months</small>
                 <hr style="border-color: rgba(255,255,255,0.3); margin: 0.5rem 0;">
-                <small class="text-white">{{ members_with_paid_dues }} with current dues</small>
+                <small class="text-white">
+                    <!-- ADDED 2026-11-04: link to everyone with current dues (sits above the tile link) -->
+                    <a href="{{ url_for('admin_members', status='current') }}" class="text-white position-relative" style="z-index: 2;">{{ members_with_paid_dues }} with current dues</a>
+                </small>
             </div>
         </div>
     </div>
     
-    <div class="col-md-3">
+    <div class="col-6 col-md mb-3"> <!-- CHANGED 2026-11-04: 5 equal tiles, 2-up on phones -->
         <div class="card text-white bg-danger">
             <div class="card-body">
                 <h3 class="card-title">{{ expired_dues|length }}</h3>
                 <p class="card-text">
                     <i class="bi bi-exclamation-triangle-fill"></i> Expired Dues
+                    <!-- ADDED 2026-11-04: whole tile links to the matching member list -->
+                    <a href="{{ url_for('admin_members', status='expired') }}" class="stretched-link" aria-label="View list"></a>
                 </p>
             </div>
         </div>
     </div>
     
-    <div class="col-md-3">
+    <div class="col-6 col-md mb-3"> <!-- CHANGED 2026-11-04: 5 equal tiles, 2-up on phones -->
         <div class="card text-white bg-warning">
             <div class="card-body">
                 <h3 class="card-title">{{ expiring_soon|length }}</h3>
                 <p class="card-text">
                     <i class="bi bi-calendar-x"></i> Expiring Soon
+                    <!-- ADDED 2026-11-04: whole tile links to the matching member list -->
+                    <a href="{{ url_for('admin_members', status='expiring') }}" class="stretched-link" aria-label="View list"></a>
                 </p>
+                <!-- ADDED 2026-11-04 -->
+                <small>Membership ends within 2 months</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- ADDED 2026-11-04: Lifetime members tile -->
+    <div class="col-6 col-md mb-3">
+        <div class="card text-white" style="background-color: #6f42c1;">
+            <div class="card-body">
+                <h3 class="card-title">{{ lifetime_members|length }}</h3>
+                <p class="card-text">
+                    <i class="bi bi-infinity"></i> Lifetime Members
+                    <!-- ADDED 2026-11-04: whole tile links to the matching member list -->
+                    <a href="{{ url_for('admin_members', status='lifetime') }}" class="stretched-link" aria-label="View list"></a>
+                </p>
+                <small>Never owe annual dues</small>
             </div>
         </div>
     </div>
 </div>
+
+<!-- ADDED 2026-11-05: family links members asked for at sign-up -->
+{% if pending_family_links %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card border-info">
+            <div class="card-header bg-info text-dark">
+                <i class="bi bi-people"></i> Family Links to Confirm ({{ pending_family_links|length }})
+            </div>
+            <div class="card-body">
+                <p class="text-muted">
+                    These new members said they're part of a family membership. Pick the family head
+                    (the person who pays the $25) and confirm, or decline to keep them Individual.
+                </p>
+                {% for item in pending_family_links %}
+                    {% set m = item.member %}
+                    <div class="border rounded p-2 mb-2">
+                        <div class="mb-2">
+                            <a href="{{ url_for('admin_member_detail', member_id=m.id) }}"><strong>{{ m.call_sign }}</strong></a>
+                            {{ m.get_full_name() }}
+                            <span class="text-muted small">signed up {{ (m.created_at|pacific).strftime('%b %d, %Y') if m.created_at else '' }}</span>
+                            <br><span class="small">Typed: <strong>{{ m.family_link_request }}</strong>
+                            {% if not item.match %}<span class="text-danger">(no exact match; pick the head below)</span>{% endif %}</span>
+                        </div>
+                        <div class="d-flex flex-wrap gap-2 align-items-center">
+                            <form method="POST" action="{{ url_for('admin_family_links') }}" class="d-flex flex-wrap gap-2 align-items-center">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="member_id" value="{{ m.id }}">
+                                <input type="hidden" name="action" value="confirm">
+                                <select name="head_id" class="form-select form-select-sm" style="width: auto; max-width: 100%;" required>
+                                    <option value="">Choose family head...</option>
+                                    {% for h in family_head_choices %}
+                                        {% if h.id != m.id %}
+                                        <option value="{{ h.id }}" {% if item.match and item.match.id == h.id %}selected{% endif %}>
+                                            {{ h.call_sign }} - {{ h.get_full_name() }} ({{ h.membership_type }})
+                                        </option>
+                                        {% endif %}
+                                    {% endfor %}
+                                </select>
+                                <button type="submit" class="btn btn-sm btn-success"
+                                        onclick="var s=this.form.head_id; var t=s.options[s.selectedIndex].text; return t.indexOf('(Family)')>-1 || t.indexOf('(Lifetime)')>-1 || confirm('This head is not Family yet. Confirming switches them to Family (\$25). Continue?');">
+                                    <i class="bi bi-check-circle"></i> Confirm
+                                </button>
+                            </form>
+                            <form method="POST" action="{{ url_for('admin_family_links') }}">
+                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                <input type="hidden" name="member_id" value="{{ m.id }}">
+                                <input type="hidden" name="action" value="decline">
+                                <button type="submit" class="btn btn-sm btn-outline-secondary">
+                                    <i class="bi bi-x-circle"></i> Decline
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- ADDED 2026-11-04: who to contact before their membership runs out -->
+{% if expiring_soon %}
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card border-warning">
+            <div class="card-header bg-warning">
+                <i class="bi bi-calendar-x"></i> Members Expiring Soon
+            </div>
+            <div class="card-body">
+                <p class="text-muted">
+                    These members' dues run out within the next 2 months (Dec 31, or end of February
+                    for anyone in the grace period). A good list to contact before the holidays.
+                </p>
+                <div class="table-responsive">
+                    <table class="table table-striped">
+                        <thead>
+                            <tr>
+                                <th>Call Sign</th>
+                                <th>Name</th>
+                                <th>Email</th>
+                                <th>Phone</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for member in expiring_soon %}
+                                <tr>
+                                    <td><strong>{{ member.call_sign }}</strong></td>
+                                    <td>{{ member.get_full_name() }}</td>
+                                    <td>{{ member.email }}</td>
+                                    <td class="text-nowrap">{{ member.phone or '-' }}</td>
+                                    <td>
+                                        <a href="{{ url_for('admin_member_detail', member_id=member.id) }}" 
+                                           class="btn btn-sm btn-primary">
+                                            <i class="bi bi-eye"></i> View
+                                        </a>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
 
 <!-- Alerts for Expired/Expiring Dues -->
 {% if expired_dues %}
@@ -71,9 +212,9 @@
             </div>
             <div class="card-body">
                 <p class="text-muted">
-                    The following members have not paid their dues for the current year. 
-                    They are currently in the grace period (through February). 
-                    After the grace period, they should be marked as inactive.
+                    The following members have not paid their dues for the current year
+                    and are past the grace period (through February).
+                    Lifetime members are never listed here.
                 </p>
                 <div class="table-responsive">
                     <table class="table table-striped">
@@ -92,7 +233,7 @@
                                     <td><strong>{{ member.call_sign }}</strong></td>
                                     <td>{{ member.get_full_name() }}</td>
                                     <td>{{ member.email }}</td>
-                                    <td>{{ member.last_contact.strftime('%Y-%m-%d') if member.last_contact else 'Unknown' }}</td>
+                                    <td>{{ (member.last_contact|pacific).strftime('%Y-%m-%d') if member.last_contact else 'Never' }}</td>{# CHANGED 2026-11-05: Pacific time #}{# CHANGED 2026-11-06: blank shows Never #}
                                     <td>
                                         <a href="{{ url_for('admin_member_detail', member_id=member.id) }}" 
                                            class="btn btn-sm btn-primary">

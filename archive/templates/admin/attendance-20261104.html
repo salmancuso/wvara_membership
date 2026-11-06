@@ -1,0 +1,297 @@
+{% extends "base.html" %}
+
+{% block title %}Record Attendance - WVARA Membership{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <h2 class="mb-4">
+            <i class="bi bi-calendar-check"></i> Record Meeting Attendance
+        </h2>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-list-check"></i> Take Attendance
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('admin_attendance') }}">
+                    <input type="hidden" name="action" value="add">
+                    
+                    <div class="mb-3">
+                        <label for="meeting_date" class="form-label">Date</label>
+                        <input type="date" 
+                               class="form-control" 
+                               id="meeting_date" 
+                               name="meeting_date" 
+                               required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="event_type" class="form-label">Event Type</label>
+                        <select class="form-select" id="event_type" name="event_type" required>
+                            <option value="Meeting">Meeting</option>
+                            <option value="Event">Event</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="event_name" class="form-label">Event Name</label>
+                        <input type="text" class="form-control" id="event_name" name="event_name" 
+                               placeholder="e.g., Monthly Club Meeting, Field Day, Repeater Maintenance" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Select Members Who Attended</label>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="select_all">
+                            <label class="form-check-label fw-bold" for="select_all">
+                                Select / Deselect All
+                            </label>
+                        </div>
+                        <hr>
+                        <div style="max-height: 400px; overflow-y: auto; border: 1px solid #dee2e6; padding: 10px; border-radius: 5px;">
+                            {% for member in members %}
+                                <div class="form-check">
+                                    <input class="form-check-input member-checkbox" 
+                                           type="checkbox" 
+                                           name="attended" 
+                                           value="{{ member.id }}" 
+                                           id="member_{{ member.id }}">
+                                    <label class="form-check-label" for="member_{{ member.id }}">
+                                        <strong>{{ member.call_sign }}</strong> - {{ member.get_full_name() }}
+                                    </label>
+                                </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary btn-lg w-100">
+                        <i class="bi bi-check-circle"></i> Record Attendance
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-md-4">
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-calendar"></i> Recent Events
+            </div>
+            <div class="card-body">
+                {% if recent_meetings %}
+                    <div class="list-group">
+                        {% for meeting in recent_meetings %}
+                            <div class="list-group-item">
+                                <div class="d-flex justify-content-between align-items-start">
+                                    <div style="flex-grow: 1; cursor: pointer;" data-bs-toggle="modal" data-bs-target="#attendeesModal{{ loop.index }}">
+                                        <strong>{{ meeting.event_name or meeting.event_type }}</strong><br>
+                                        <small class="text-muted">
+                                            {{ meeting.meeting_date.strftime('%B %d, %Y') }}<br>
+                                            <span class="badge bg-secondary">{{ meeting.event_type }}</span>
+                                            <span class="badge bg-info">{{ meeting.count }} attendees</span>
+                                            <i class="bi bi-eye text-primary"></i> Click to view
+                                        </small>
+                                    </div>
+                                    <div>
+                                        <button type="button" class="btn btn-sm btn-danger" 
+                                                data-bs-toggle="modal" data-bs-target="#deleteModal{{ loop.index }}">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Attendees Modal -->
+                            <div class="modal fade" id="attendeesModal{{ loop.index }}" tabindex="-1">
+                                <div class="modal-dialog">
+                                    <div class="modal-content">
+                                        <div class="modal-header">
+                                            <h5 class="modal-title">{{ meeting.event_name or meeting.event_type }} - Attendance</h5>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                        </div>
+                                        <div class="modal-body">
+                                            <p><strong>Date:</strong> {{ meeting.meeting_date.strftime('%B %d, %Y') }}</p>
+                                            <p><strong>Type:</strong> <span class="badge bg-secondary">{{ meeting.event_type }}</span></p>
+                                            <p><strong>Attendees ({{ meeting.count }}):</strong></p>
+                                            <div class="list-group">
+                                                {% for record in meeting.meeting_date | get_attendance_for_date %}
+                                                    <div class="list-group-item d-flex justify-content-between align-items-center">
+                                                        <div>
+                                                            <strong>{{ record.member.call_sign }}</strong> - {{ record.member.get_full_name() }}
+                                                        </div>
+                                                        <div>
+                                                            <button type="button" class="btn btn-sm btn-danger" 
+                                                                    data-bs-toggle="modal" 
+                                                                    data-bs-target="#removeAttendeeModal{{ record.id }}"
+                                                                    data-bs-dismiss="modal">
+                                                                <i class="bi bi-x"></i> Remove
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                {% endfor %}
+                                            </div>
+                                        </div>
+                                        <div class="modal-footer">
+                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Delete Modal -->
+                            <div class="modal fade" id="deleteModal{{ loop.index }}" tabindex="-1">
+                                <div class="modal-dialog">
+                                    <div class="modal-content">
+                                        <div class="modal-header bg-danger text-white">
+                                            <h5 class="modal-title">Delete Attendance Record</h5>
+                                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                                        </div>
+                                        <form method="POST" action="{{ url_for('admin_attendance') }}">
+                                            <input type="hidden" name="action" value="delete">
+                                            <input type="hidden" name="meeting_date" value="{{ meeting.meeting_date.strftime('%Y-%m-%d') }}">
+                                            <div class="modal-body">
+                                                <p>Are you sure you want to delete this attendance record?</p>
+                                                <p><strong>Event:</strong> {{ meeting.event_name or meeting.event_type }}</p>
+                                                <p><strong>Date:</strong> {{ meeting.meeting_date.strftime('%B %d, %Y') }}</p>
+                                                <p><strong>Attendees:</strong> {{ meeting.count }}</p>
+                                                <p class="text-danger"><i class="bi bi-exclamation-triangle"></i> This will delete all attendance records for this date!</p>
+                                            </div>
+                                            <div class="modal-footer">
+                                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                                <button type="submit" class="btn btn-danger">Delete Record</button>
+                                            </div>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Remove Individual Attendee Modals -->
+                            {% for record in meeting.meeting_date | get_attendance_for_date %}
+                                <div class="modal fade" id="removeAttendeeModal{{ record.id }}" tabindex="-1">
+                                    <div class="modal-dialog">
+                                        <div class="modal-content">
+                                            <div class="modal-header bg-warning">
+                                                <h5 class="modal-title">Remove Attendee</h5>
+                                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                            </div>
+                                            <form method="POST" action="{{ url_for('admin_attendance') }}">
+                                                <input type="hidden" name="action" value="remove_attendee">
+                                                <input type="hidden" name="attendance_id" value="{{ record.id }}">
+                                                <div class="modal-body">
+                                                    <p>Remove <strong>{{ record.member.call_sign }}</strong> from this event?</p>
+                                                    <p><strong>Event:</strong> {{ meeting.event_name or meeting.event_type }}</p>
+                                                    <p><strong>Date:</strong> {{ meeting.meeting_date.strftime('%B %d, %Y') }}</p>
+                                                </div>
+                                                <div class="modal-footer">
+                                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                                    <button type="submit" class="btn btn-warning">Remove Attendee</button>
+                                                </div>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
+                            {% endfor %}
+                        {% endfor %}
+                    </div>
+                {% else %}
+                    <p class="text-muted">No recent events recorded.</p>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="card mt-3">
+            <div class="card-header">
+                <i class="bi bi-info-circle"></i> Event Type Definitions
+            </div>
+            <div class="card-body">
+                <p><strong>Meeting:</strong> Regular scheduled club activities</p>
+                <ul class="small">
+                    <li>Monthly club meetings</li>
+                    <li>Board of Directors meetings</li>
+                </ul>
+                
+                <p><strong>Event:</strong> Special club activities and outings</p>
+                <ul class="small">
+                    <li>Field Day</li>
+                    <li>USS Hornet visit</li>
+                    <li>Mount Umunhum 5GHz party</li>
+                    <li>Winter Field Day</li>
+                </ul>
+                
+                <p><strong>Other:</strong> Maintenance and special tasks</p>
+                <ul class="small">
+                    <li>Repeater maintenance</li>
+                    <li>Location reconnaissance</li>
+                    <li>Equipment setup</li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="card mt-3">
+            <div class="card-header">
+                <i class="bi bi-lightbulb"></i> Instructions
+            </div>
+            <div class="card-body">
+                <ol class="small">
+                    <li>Select the event date</li>
+                    <li>Choose the event type</li>
+                    <li>Enter a descriptive event name</li>
+                    <li>Check boxes for members who attended</li>
+                    <li>Use "Select All" to quickly check everyone</li>
+                    <li>Add any notes about the event (optional)</li>
+                    <li>Click "Record Attendance"</li>
+                </ol>
+                <p class="small text-muted mb-0">
+                    <i class="bi bi-exclamation-circle"></i> Recording attendance for a date that already exists will overwrite the previous record.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Select/deselect all functionality
+    document.getElementById('select_all').addEventListener('change', function() {
+        const checkboxes = document.querySelectorAll('.member-checkbox');
+        checkboxes.forEach(checkbox => {
+            checkbox.checked = this.checked;
+        });
+    });
+    
+    // Update select all checkbox if individual checkboxes change
+    document.querySelectorAll('.member-checkbox').forEach(checkbox => {
+        checkbox.addEventListener('change', function() {
+            const allCheckboxes = document.querySelectorAll('.member-checkbox');
+            const checkedCheckboxes = document.querySelectorAll('.member-checkbox:checked');
+            const selectAll = document.getElementById('select_all');
+            
+            selectAll.checked = allCheckboxes.length === checkedCheckboxes.length;
+        });
+    });
+    
+    // Set today's date as default
+    document.getElementById('meeting_date').valueAsDate = new Date();
+    
+    // Update event name placeholder based on event type
+    document.getElementById('event_type').addEventListener('change', function() {
+        const eventName = document.getElementById('event_name');
+        switch(this.value) {
+            case 'Meeting':
+                eventName.placeholder = 'e.g., Monthly Club Meeting, Board of Directors Meeting';
+                break;
+            case 'Event':
+                eventName.placeholder = 'e.g., Field Day, USS Hornet Visit, Mount Umunhum 5GHz Party';
+                break;
+            case 'Other':
+                eventName.placeholder = 'e.g., Repeater Maintenance, Location Reconnaissance';
+                break;
+        }
+    });
+</script>
+{% endblock %}

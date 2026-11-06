@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{# ADDED 2026-11-04: reports any logged-in member can pull #}
+
+{% block title %}Reports - WVARA Membership{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <span class="wv-eyebrow" style="color: var(--wv-orange);">Members</span>
+        <h2 class="mb-4"><i class="bi bi-file-earmark-text"></i> Reports</h2>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card mb-3">
+            <div class="card-header"><i class="bi bi-people"></i> Member Directory</div>
+            <div class="card-body">
+                <p>Every active member's call sign (or username), name, email, phone and address.</p>
+                {% if hidden_count %}
+                    <p class="small text-muted">
+                        {{ hidden_count }} member{{ 's' if hidden_count != 1 }} asked to keep their contact info private,
+                        so only their call sign (or username), name and city are listed.
+                    </p>
+                {% endif %}
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('member_directory', format='pdf') }}" class="btn btn-primary">
+                        <i class="bi bi-file-pdf"></i> Download PDF
+                    </a>
+                    <a href="{{ url_for('member_directory', format='csv') }}" class="btn btn-outline-primary">
+                        <i class="bi bi-file-earmark-spreadsheet"></i> Download CSV (for Excel)
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        {# ADDED 2026-11-05: pay dues from the Reports page #}
+        {% if pay_dues %}
+        <div class="card mb-3">
+            <div class="card-header"><i class="bi bi-credit-card"></i> Pay Your Dues</div>
+            <div class="card-body">
+                <p>Individual ${{ '%.0f'|format(pay_dues.amounts['Individual']) }} or Family ${{ '%.0f'|format(pay_dues.amounts['Family']) }} per year,
+                    paid securely through PayPal (PayPal account or credit/debit card).</p>
+                <div class="d-grid">
+                    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#payDuesModal">
+                        <i class="bi bi-credit-card"></i> Pay Dues
+                    </button>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <div class="card mb-3">
+            <div class="card-header"><i class="bi bi-geo-alt"></i> Member Map</div>
+            <div class="card-body">
+                <p>See where members live around the repeaters, grouped by ZIP code.</p>
+                <div class="d-grid">
+                    <a href="{{ url_for('member_map') }}" class="btn btn-primary">
+                        <i class="bi bi-map"></i> Open the Map
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-header"><i class="bi bi-shield-lock"></i> Your Privacy</div>
+            <div class="card-body">
+                <p class="mb-2">
+                    Prefer to keep your email, phone and street address out of the directory?
+                </p>
+                <a href="{{ url_for('profile') }}#directory_opt_out" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-gear"></i> Change it on your Profile
+                </a>
+                <p class="small text-muted mt-3 mb-0">
+                    Please keep the directory within the club and don't share it outside WVARA.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

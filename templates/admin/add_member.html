@@ -22,6 +22,7 @@
             </div>
             <div class="card-body">
                 <form method="POST" action="{{ url_for('admin_add_member') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <div class="alert alert-info">
                         <i class="bi bi-info-circle"></i> Initial password will be set to the member's call sign.
                         They will be required to change it on first login.
@@ -31,9 +32,23 @@
                     
                     <div class="row">
                         <div class="col-md-6 mb-3">
-                            <label for="call_sign" class="form-label">Call Sign <span class="text-danger">*</span></label>
-                            <input type="text" class="form-control" id="call_sign" name="call_sign" 
-                                   required style="text-transform: uppercase;" autofocus>
+                            <label for="call_sign" class="form-label">Call Sign / Username <span class="text-danger">*</span></label>
+                            <!-- CHANGED 2026-11-04: Look Up button pulls public FCC data -->
+                            <div class="input-group">
+                                <input type="text" class="form-control" id="call_sign" name="call_sign"
+                                       required maxlength="15" style="text-transform: uppercase;" autofocus>
+                                <button type="button" class="btn btn-outline-primary" id="lookupBtn" onclick="lookupCallSign()">
+                                    <i class="bi bi-search"></i> Look Up
+                                </button>
+                            </div>
+                            <div id="lookupMessage" class="form-text"></div>
+                            <!-- ADDED 2026-11-05: members without a license get a username (3 to 15 letters and numbers) -->
+                            <div class="form-check mt-2">
+                                <input class="form-check-input" type="checkbox" id="not_licensed" name="not_licensed">
+                                <label class="form-check-label" for="not_licensed">
+                                    Not licensed (the field above is a username: 3 to 15 letters and numbers)
+                                </label>
+                            </div>
                         </div>
                         
                         <div class="col-md-6 mb-3">
@@ -42,7 +57,10 @@
                                 <option value="">Select license class</option>
                                 <option value="Technician">Technician</option>
                                 <option value="General">General</option>
-                                <option value="Amateur Extra">Amateur Extra</option>
+                                <option value="Amateur Extra">Extra</option>
+                                <!-- ADDED 2026-11-04: older FCC classes some members still hold -->
+                                <option value="Advanced">Advanced</option>
+                                <option value="Novice">Novice</option>
                             </select>
                         </div>
                     </div>
@@ -201,6 +219,86 @@
     
     document.getElementById('state').addEventListener('input', function(e) {
         e.target.value = e.target.value.toUpperCase();
+    });
+
+    // ADDED 2026-11-04: FCC call sign lookup
+    const LOOKUP_URL = "{{ url_for('admin_lookup_callsign') }}";
+    const LOOKUP_FIELDS = ['first_name', 'last_name', 'address', 'city', 'state', 'zip_code', 'fcc_license_class'];
+
+    function showLookupMessage(html, cssClass) {
+        const box = document.getElementById('lookupMessage');
+        box.className = 'form-text ' + (cssClass || '');
+        box.innerHTML = html;
+    }
+
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text || '';
+        return div.innerHTML;
+    }
+
+    async function lookupCallSign() {
+        const callSign = document.getElementById('call_sign').value.trim().toUpperCase();
+        const btn = document.getElementById('lookupBtn');
+        if (!callSign) {
+            showLookupMessage('Enter a call sign first.', 'text-danger');
+            return;
+        }
+
+        btn.disabled = true;
+        showLookupMessage('<span class="spinner-border spinner-border-sm"></span> Looking up ' + escapeHtml(callSign) + '...', 'text-muted');
+
+        try {
+            const response = await fetch(LOOKUP_URL + '?call_sign=' + encodeURIComponent(callSign));
+            const result = await response.json();
+            let notes = [];
+
+            if (result.existing_member) {
+                notes.push('<span class="text-danger"><i class="bi bi-exclamation-triangle-fill"></i> ' +
+                    escapeHtml(callSign) + ' is already a member (' + escapeHtml(result.existing_member.name) +
+                    '). <a href="' + result.existing_member.url + '">View member</a></span>');
+            }
+
+            if (result.found) {
+                // Only fill boxes that are still empty, so nothing you typed gets overwritten
+                let filled = 0;
+                LOOKUP_FIELDS.forEach(function(field) {
+                    const input = document.getElementById(field);
+                    const value = result.data[field];
+                    if (input && value && !input.value) {
+                        input.value = value;
+                        input.classList.add('is-valid');
+                        filled++;
+                    }
+                });
+                let line = '<span class="text-success"><i class="bi bi-check-circle-fill"></i> Filled ' + filled +
+                    ' field(s) from ' + escapeHtml(result.data.source) + '.</span> Email and phone are not public, please add them.';
+                if (result.data.license_type === 'Club') {
+                    line += ' <strong>Heads up:</strong> this is a club license, not a person.';
+                }
+                if (result.data.expires) {
+                    line += ' License expires ' + escapeHtml(result.data.expires) + '.';
+                }
+                notes.push(line);
+                document.getElementById('email').focus();
+            } else {
+                notes.push('<span class="text-warning-emphasis">' + escapeHtml(result.message) + '</span>');
+            }
+
+            showLookupMessage(notes.join('<br>'), '');
+        } catch (err) {
+            showLookupMessage('Lookup is not available right now. You can still enter the details by hand.', 'text-danger');
+        } finally {
+            btn.disabled = false;
+        }
+    }
+
+    // Press Enter in the call sign box to look up instead of submitting the form
+    document.getElementById('call_sign').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            lookupCallSign();
+        }
     });
 </script>
 {% endblock %}

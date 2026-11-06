@@ -7,13 +7,26 @@ from datetime import datetime, date, timedelta
 
 db = SQLAlchemy()
 
+# ADDED 2026-11-04: club dues rules
+DUES_AMOUNT = 15.00            # $15 per calendar year
+GRACE_PERIOD_LAST_MONTH = 2    # last year's dues still count through the end of February
+DUES_RENEWAL_WARNING_MONTHS = 2  # "Expiring Soon" starts 2 months before Dec 31 (Nov 1)
+
+# ADDED 2026-11-05: annual dues by membership type (Lifetime pays nothing)
+DUES_BY_TYPE = {'Individual': 15.00, 'Family': 25.00}
+
+
+def dues_amount_for(membership_type) -> float:
+    """Annual dues for a membership type (Family $25, everything else $15)"""
+    return DUES_BY_TYPE.get((membership_type or '').strip().title(), DUES_AMOUNT)
+
 
 class Member(db.Model):
     """Core member information"""
     __tablename__ = 'members'
     
     id = db.Column(db.Integer, primary_key=True)
-    call_sign = db.Column(db.String(10), unique=True, nullable=False, index=True)
+    call_sign = db.Column(db.String(15), unique=True, nullable=False, index=True)  # CHANGED 2026-11-05: 10 -> 15 for usernames
     first_name = db.Column(db.String(50), nullable=False)
     last_name = db.Column(db.String(50), nullable=False)
     email = db.Column(db.String(120), nullable=False)
@@ -39,7 +52,22 @@ class Member(db.Model):
     
     # Profile photo from QRZ
     qrz_photo_url = db.Column(db.String(500))
-    
+
+    # ADDED 2026-11-04: member chose to hide email, phone and street address from the member directory
+    directory_opt_out = db.Column(db.Boolean, default=False, nullable=False, server_default='0')
+
+    # ADDED 2026-11-05: False for members without an amateur radio license (call_sign then holds their username)
+    is_licensed = db.Column(db.Boolean, default=True, nullable=False, server_default='1')
+
+    # ADDED 2026-11-05: family membership; points to the member who pays the $25 Family dues
+    family_head_id = db.Column(db.Integer, db.ForeignKey('members.id'), nullable=True, index=True)
+
+    # ADDED 2026-11-05: call sign / username typed at sign-up, waiting for an admin to confirm the family link
+    family_link_request = db.Column(db.String(15))  # CHANGED 2026-11-05: 10 -> 15 for usernames
+
+    # ADDED 2026-11-06: admin-only legacy notes (old club database fields, history). Never shown to members.
+    admin_notes = db.Column(db.Text)
+
     # Authentication
     password_hash = db.Column(db.String(200), nullable=False)
     password_is_temporary = db.Column(db.Boolean, default=True)
@@ -75,25 +103,58 @@ class Member(db.Model):
         ).first()
         return payment
     
+    # ADDED 2026-11-04: "Lifetime" and "Life Member" both count as lifetime
+    def is_lifetime(self):
+        """True for Lifetime / Life Member membership types"""
+        return (self.membership_type or '').strip().lower() in ('lifetime', 'life member', 'life')
+
+    # ADDED 2026-11-04: single source of truth for dues status, used by every page and report
+    def get_dues_status(self):
+        """
+        Return one of: 'lifetime', 'paid', 'grace', 'expired'
+        - lifetime: Lifetime members are always current
+        - paid:     dues recorded for the current calendar year
+        - grace:    January/February, and last year's dues are paid
+        - expired:  everything else
+        """
+        if self.is_lifetime():
+            return 'lifetime'
+
+        # CHANGED 2026-11-05: family members share the head's dues status
+        head = self.get_family_head()
+        if head is not None:
+            return head.get_dues_status()
+
+        today = date.today()
+        paid_years = {p.year for p in DuesPayment.query.filter_by(member_id=self.id).all()}
+
+        if today.year in paid_years:
+            return 'paid'
+        if today.month <= GRACE_PERIOD_LAST_MONTH and (today.year - 1) in paid_years:
+            return 'grace'
+        return 'expired'
+
+    # ADDED 2026-11-05: family membership helpers
+    def get_family_head(self):
+        """The member who pays this member's Family dues, or None (follows one level only, so no loops)"""
+        if not self.family_head_id or self.family_head_id == self.id:
+            return None
+        head = db.session.get(Member, self.family_head_id)
+        if head is None or head.family_head_id:
+            return None
+        return head
+
+    def get_family_members(self):
+        """Members linked to this member as their family head"""
+        return Member.query.filter_by(family_head_id=self.id).order_by(Member.first_name).all()
+
+    def is_family_head(self):
+        """True if at least one member is linked to this member"""
+        return Member.query.filter_by(family_head_id=self.id).first() is not None
+
     def is_dues_current(self):
-        """Check if dues are paid for current year"""
-        current_year = date.today().year
-        current_date = date.today()
-        
-        # Grace period: through February of following year
-        grace_end = date(current_year, 2, 28)
-        if current_date.year > current_year and current_date <= grace_end:
-            # Check previous year during grace period
-            year_to_check = current_year - 1
-        else:
-            year_to_check = current_year
-        
-        payment = DuesPayment.query.filter_by(
-            member_id=self.id,
-            year=year_to_check
-        ).first()
-        
-        return payment is not None
+        """Check if dues are current (CHANGED 2026-11-04: grace period and Lifetime now work)"""
+        return self.get_dues_status() in ('lifetime', 'paid', 'grace')
     
     def get_membership_duration(self):
         """Calculate how long member has been with club"""
@@ -138,7 +199,7 @@ class DuesPayment(db.Model):
     notes = db.Column(db.Text)
     
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    created_by = db.Column(db.String(10))  # Call sign of admin who recorded it
+    created_by = db.Column(db.String(15))  # Call sign of admin who recorded it  # CHANGED 2026-11-05: 10 -> 15 for usernames
     
     def __repr__(self):
         return f'<DuesPayment {self.member.call_sign} - {self.year}>'
@@ -175,10 +236,35 @@ class MeetingAttendance(db.Model):
     notes = db.Column(db.Text)
     
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    recorded_by = db.Column(db.String(10))  # Call sign of admin who recorded it
+    recorded_by = db.Column(db.String(15))  # Call sign of admin who recorded it  # CHANGED 2026-11-05: 10 -> 15 for usernames
     
     def __repr__(self):
         return f'<MeetingAttendance {self.member.call_sign} - {self.meeting_date}>'
+
+
+class PaymentNotice(db.Model):
+    """ADDED 2026-11-05: a member started a PayPal dues payment; the treasurer confirms it against PayPal"""
+    __tablename__ = 'payment_notices'
+
+    id = db.Column(db.Integer, primary_key=True)
+    member_id = db.Column(db.Integer, db.ForeignKey('members.id'), nullable=False)
+    dues_year = db.Column(db.Integer, nullable=False)
+    membership_choice = db.Column(db.String(20), nullable=False)   # Individual / Family
+    amount = db.Column(db.Float, nullable=False)
+    call_sign = db.Column(db.String(15))      # as the member entered it in the form  # CHANGED 2026-11-05: 10 -> 15 for usernames
+    name = db.Column(db.String(120))
+    email = db.Column(db.String(120))
+    family_members = db.Column(db.Text)       # Family only: other names / call signs
+    status = db.Column(db.String(20), default='pending', nullable=False)  # pending / confirmed / dismissed
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    handled_by = db.Column(db.String(15))  # CHANGED 2026-11-05: 10 -> 15 for usernames
+    handled_at = db.Column(db.DateTime)
+    dues_payment_id = db.Column(db.Integer, db.ForeignKey('dues_payments.id'))
+
+    member = db.relationship('Member', backref=db.backref('payment_notices', lazy=True, cascade='all, delete-orphan'))
+
+    def __repr__(self):
+        return f'<PaymentNotice {self.call_sign} {self.dues_year} {self.status}>'
 
 
 class AdminLog(db.Model):
@@ -186,9 +272,9 @@ class AdminLog(db.Model):
     __tablename__ = 'admin_log'
     
     id = db.Column(db.Integer, primary_key=True)
-    admin_call_sign = db.Column(db.String(10), nullable=False)
+    admin_call_sign = db.Column(db.String(15), nullable=False)  # CHANGED 2026-11-05: 10 -> 15 for usernames
     action = db.Column(db.String(200), nullable=False)
-    target_member_call_sign = db.Column(db.String(10))
+    target_member_call_sign = db.Column(db.String(15))  # CHANGED 2026-11-05: 10 -> 15 for usernames
     details = db.Column(db.Text)
     ip_address = db.Column(db.String(50))
     

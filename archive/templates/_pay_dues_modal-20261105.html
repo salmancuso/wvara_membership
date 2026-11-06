@@ -1,0 +1,184 @@
+{# ADDED 2026-11-05: Pay Dues lightbox. Included from base.html for logged-in, non-Lifetime members.
+   Open it from anywhere with: data-bs-toggle="modal" data-bs-target="#payDuesModal" #}
+{% if pay_dues %}
+<div class="modal fade" id="payDuesModal" tabindex="-1" aria-labelledby="payDuesTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content" style="border-radius: var(--wv-radius); overflow: hidden;">
+            <div class="modal-header" style="background: var(--wv-bg-soft); color: var(--wv-text);">
+                <div>
+                    <span class="wv-eyebrow d-block">WVARA Dues</span>
+                    <h5 class="modal-title mb-0" id="payDuesTitle" style="color: var(--wv-text);">Pay Your Dues</h5>
+                </div>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+
+            <!-- Step 1: details -->
+            <form id="payDuesForm" novalidate>
+                <div class="modal-body" id="payStep1">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                    <label class="form-label fw-bold">Membership</label>
+                    <div class="row g-2 mb-3">
+                        {% for choice, label in [('Individual', 'Individual'), ('Family', 'Family')] %}
+                        <div class="col-6">
+                            <input type="radio" class="btn-check" name="membership_choice" id="pay_{{ choice }}"
+                                   value="{{ choice }}" {% if pay_dues.choice == choice %}checked{% endif %}>
+                            <label class="btn btn-outline-primary w-100 py-2" for="pay_{{ choice }}">
+                                {{ label }}<br><strong>${{ '%.2f'|format(pay_dues.amounts[choice]) }}</strong> / year
+                            </label>
+                        </div>
+                        {% endfor %}
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="pay_year" class="form-label fw-bold">Dues are for</label>
+                        <select class="form-select" id="pay_year" name="dues_year">
+                            {% for y in pay_dues.years %}
+                                <option value="{{ y }}" {% if y == pay_dues.default_year %}selected{% endif %}>{{ y }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <p class="small text-muted mb-2">This goes to the treasurer with your payment. Fix anything that's out of date:</p>
+                    <div class="row g-2">
+                        <div class="col-4">
+                            <label for="pay_call" class="form-label small mb-1">Call Sign</label>
+                            <input type="text" class="form-control" id="pay_call" name="call_sign"
+                                   value="{{ pay_dues.call_sign }}" maxlength="10" style="text-transform: uppercase;">
+                        </div>
+                        <div class="col-8">
+                            <label for="pay_name" class="form-label small mb-1">Name</label>
+                            <input type="text" class="form-control" id="pay_name" name="name" value="{{ pay_dues.name }}" maxlength="120">
+                        </div>
+                        <div class="col-12">
+                            <label for="pay_email" class="form-label small mb-1">Email</label>
+                            <input type="email" class="form-control" id="pay_email" name="email" value="{{ pay_dues.email }}" maxlength="120">
+                        </div>
+                        <div class="col-12" id="payFamilyBox" {% if pay_dues.choice != 'Family' %}style="display: none;"{% endif %}>
+                            <label for="pay_family" class="form-label small mb-1">Other family members (names or call signs)</label>
+                            <textarea class="form-control" id="pay_family" name="family_members" rows="2" maxlength="1000"
+                                      placeholder="e.g., Sarah Mancuso, KK6XYZ"></textarea>
+                        </div>
+                    </div>
+                    <div id="payError" class="alert alert-danger small mt-3 mb-0" style="display: none;"></div>
+                </div>
+
+                <!-- Step 2: PayPal is open -->
+                <div class="modal-body text-center" id="payStep2" style="display: none;">
+                    <div class="spinner-border text-danger mb-3" role="status"></div>
+                    <h5>Finish up in the PayPal window</h5>
+                    <p class="text-muted mb-2">Log in to PayPal or pay with a credit or debit card as a guest.
+                        When you're done, close the PayPal window and you'll come right back here.</p>
+                    <p class="small mb-0">Don't see it? <a href="#" id="payReopen" target="_blank" rel="noopener">Open PayPal again</a></p>
+                </div>
+
+                <!-- Step 3: thank you -->
+                <div class="modal-body text-center" id="payStep3" style="display: none;">
+                    <i class="bi bi-check-circle-fill text-success" style="font-size: 3rem;"></i>
+                    <h5 class="mt-2">Thank you!</h5>
+                    <p class="text-muted mb-0">If your PayPal payment went through, the treasurer will mark you paid
+                        shortly. PayPal also emails you a receipt.</p>
+                </div>
+
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" id="payCancelBtn">Cancel</button>
+                    <button type="submit" class="btn btn-primary" id="payContinueBtn">
+                        Continue to PayPal (<span id="payAmount">${{ '%.2f'|format(pay_dues.amounts[pay_dues.choice]) }}</span>)
+                    </button>
+                    <button type="button" class="btn btn-primary" id="payDoneBtn" style="display: none;">I'm done</button>
+                    <button type="button" class="btn btn-primary" data-bs-dismiss="modal" id="payCloseBtn" style="display: none;">Close</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    const START_URL = {{ url_for('pay_dues_start')|tojson }};
+    const AMOUNTS = {{ pay_dues.amounts|tojson }};
+    const modalEl = document.getElementById('payDuesModal');
+    const form = document.getElementById('payDuesForm');
+    const $ = (id) => document.getElementById(id);
+    let payWindow = null;
+    let watcher = null;
+
+    function showStep(n) {
+        [1, 2, 3].forEach((i) => { $('payStep' + i).style.display = (i === n) ? '' : 'none'; });
+        $('payContinueBtn').style.display = n === 1 ? '' : 'none';
+        $('payCancelBtn').style.display = n === 1 ? '' : 'none';
+        $('payDoneBtn').style.display = n === 2 ? '' : 'none';
+        $('payCloseBtn').style.display = n === 3 ? '' : 'none';
+    }
+
+    function currentChoice() {
+        const picked = form.querySelector('input[name="membership_choice"]:checked');
+        return picked ? picked.value : '';
+    }
+
+    function updateChoice() {
+        const choice = currentChoice();
+        $('payFamilyBox').style.display = choice === 'Family' ? '' : 'none';
+        if (AMOUNTS[choice]) $('payAmount').textContent = '$' + Number(AMOUNTS[choice]).toFixed(2);
+    }
+    form.querySelectorAll('input[name="membership_choice"]').forEach((r) => r.addEventListener('change', updateChoice));
+
+    function finished() {
+        if (watcher) { clearInterval(watcher); watcher = null; }
+        showStep(3);
+    }
+
+    form.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        $('payError').style.display = 'none';
+        if (!currentChoice()) {
+            $('payError').textContent = 'Please choose Individual or Family.';
+            $('payError').style.display = '';
+            return;
+        }
+        // Open the pop-up right away (inside the click) so pop-up blockers allow it
+        const w = 520, h = 720;
+        const left = window.screenX + Math.max(0, (window.outerWidth - w) / 2);
+        const top = window.screenY + Math.max(0, (window.outerHeight - h) / 2);
+        payWindow = window.open('', 'wvaraPayPal', `width=${w},height=${h},left=${left},top=${top},resizable=yes,scrollbars=yes`);
+        if (payWindow) {
+            payWindow.document.write('<p style="font-family: sans-serif; padding: 2rem;">Connecting to PayPal&hellip;</p>');
+        }
+        $('payContinueBtn').disabled = true;
+        try {
+            const response = await fetch(START_URL, { method: 'POST', body: new FormData(form), credentials: 'same-origin' });
+            const result = await response.json();
+            if (!result.ok) throw new Error(result.message || 'Something went wrong.');
+            $('payReopen').href = result.paypal_url;
+            if (payWindow && !payWindow.closed) {
+                payWindow.location.href = result.paypal_url;
+                showStep(2);
+                watcher = setInterval(() => { if (!payWindow || payWindow.closed) finished(); }, 1000);
+            } else {
+                // Pop-up was blocked: fall back to a normal link
+                showStep(2);
+                $('payReopen').textContent = 'Open PayPal';
+            }
+        } catch (err) {
+            if (payWindow && !payWindow.closed) payWindow.close();
+            $('payError').textContent = err.message || 'Could not reach the server. Please try again.';
+            $('payError').style.display = '';
+        } finally {
+            $('payContinueBtn').disabled = false;
+        }
+    });
+
+    $('payDoneBtn').addEventListener('click', function () {
+        if (payWindow && !payWindow.closed) payWindow.close();
+        finished();
+    });
+
+    // Every time the lightbox opens, start fresh on step 1
+    modalEl.addEventListener('show.bs.modal', function () {
+        $('payError').style.display = 'none';
+        showStep(1);
+        updateChoice();
+    });
+})();
+</script>
+{% endif %}

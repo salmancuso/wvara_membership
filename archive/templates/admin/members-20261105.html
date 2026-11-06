@@ -1,0 +1,261 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Members - WVARA Membership{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <h2 class="mb-4">
+            <i class="bi bi-people-fill"></i> Manage Members
+        </h2>
+    </div>
+</div>
+
+<div class="row mb-3">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-body">
+                <form method="GET" action="{{ url_for('admin_members') }}" class="row g-3">
+                    <div class="col-md-5">
+                        <input type="text" 
+                               class="form-control" 
+                               name="search" 
+                               placeholder="Search by call sign, name, or email..." 
+                               value="{{ search }}">
+                    </div>
+                    <div class="col-md-4">
+                        <select class="form-select" name="status" onchange="this.form.submit()">
+                            {# CHANGED 2026-11-04: clearer names; "Active" now only means dues + recent event #}
+                            <option value="all" {% if status_filter == 'all' %}selected{% endif %}>
+                                All Members (enabled accounts)
+                            </option>
+                            <option value="active" {% if status_filter == 'active' %}selected{% endif %}>
+                                Active (dues current + event in last 6 months)
+                            </option>
+                            <option value="current" {% if status_filter == 'current' %}selected{% endif %}>
+                                Dues Current
+                            </option>
+                            <option value="inactive" {% if status_filter == 'inactive' %}selected{% endif %}>
+                                Paid, No Recent Events
+                            </option>
+                            <option value="expiring" {% if status_filter == 'expiring' %}selected{% endif %}>
+                                Expiring Soon
+                            </option>
+                            <option value="expired" {% if status_filter == 'expired' %}selected{% endif %}>
+                                Expired Dues
+                            </option>
+                            <option value="lifetime" {% if status_filter == 'lifetime' %}selected{% endif %}>
+                                Lifetime Members
+                            </option>
+                            <option value="disabled" {% if status_filter == 'disabled' %}selected{% endif %}>
+                                Disabled Accounts
+                            </option>
+                            <option value="everyone" {% if status_filter == 'everyone' %}selected{% endif %}>
+                                Everyone (including disabled)
+                            </option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-search"></i> Search
+                        </button>
+                        <a href="{{ url_for('admin_members') }}" class="btn btn-secondary">
+                            <i class="bi bi-x-circle"></i> Clear
+                        </a>
+                    </div>
+                </form>
+                <div class="mt-3">
+                    <a href="{{ url_for('admin_add_member') }}" class="btn btn-success">
+                        <i class="bi bi-plus-circle"></i> Add New Member
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- CHANGED 2026-11-04: sortable columns, paging, Member Since, clickable email/phone,
+     four dues badges, and "Account" (Enabled/Disabled) instead of a second "Active" -->
+<style>
+    th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+    th.sortable:hover { color: var(--bs-primary); }
+    th.sortable .sort-icon { opacity: .35; font-size: .8em; }
+    th.sortable.sorted .sort-icon { opacity: 1; }
+</style>
+<div class="row">
+    <div class="col-md-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <span><i class="bi bi-list"></i> Members List ({{ members|length }} members)</span>
+                <span class="d-flex align-items-center gap-2">
+                    <label for="pageSize" class="small mb-0">Show</label>
+                    <select id="pageSize" class="form-select form-select-sm" style="width: auto;">
+                        <option value="25" selected>25</option>
+                        <option value="50">50</option>
+                        <option value="100">100</option>
+                        <option value="0">All</option>
+                    </select>
+                </span>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-striped table-hover align-middle" id="membersTable">
+                        <thead>
+                            <tr>
+                                <th class="sortable" data-col="0" data-type="text">Call Sign <i class="bi bi-arrow-down-up sort-icon"></i></th>
+                                <th class="sortable" data-col="1" data-type="text">Name <i class="bi bi-arrow-down-up sort-icon"></i></th>
+                                <th class="sortable" data-col="2" data-type="text">Email <i class="bi bi-arrow-down-up sort-icon"></i></th>
+                                <th>Phone</th>
+                                <th class="sortable" data-col="4" data-type="text">Membership <i class="bi bi-arrow-down-up sort-icon"></i></th>
+                                <th class="sortable" data-col="5" data-type="text">Member Since <i class="bi bi-arrow-down-up sort-icon"></i></th>
+                                <th class="sortable" data-col="6" data-type="num">Dues Status <i class="bi bi-arrow-down-up sort-icon"></i></th>
+                                <th class="sortable" data-col="7" data-type="text">Account <i class="bi bi-arrow-down-up sort-icon"></i></th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% set dues_order = {'expired': 0, 'grace': 1, 'paid': 2, 'lifetime': 3} %}
+                            {% for member in members %}
+                                {% set dues = member.get_dues_status() %}
+                                <tr>
+                                    <td data-sort="{{ member.call_sign }}"><strong>{{ member.call_sign }}</strong></td>
+                                    <td data-sort="{{ member.last_name }} {{ member.first_name }}">{{ member.get_full_name() }}</td>
+                                    <td data-sort="{{ member.email or '' }}">
+                                        {% if member.email %}
+                                            <a href="mailto:{{ member.email }}">{{ member.email }}</a>
+                                        {% else %}-{% endif %}
+                                    </td>
+                                    <td class="text-nowrap">
+                                        {% if member.phone %}
+                                            <a href="tel:{{ member.phone|replace(' ', '')|replace('(', '')|replace(')', '')|replace('-', '') }}">{{ member.phone }}</a>
+                                        {% else %}-{% endif %}
+                                    </td>
+                                    <td data-sort="{{ member.membership_type }}">{{ member.membership_type }}</td>
+                                    <td class="text-nowrap" data-sort="{{ member.join_date.strftime('%Y-%m-%d') if member.join_date else '' }}"
+                                        title="{{ member.get_membership_duration() }}">
+                                        {{ member.join_date.strftime('%b %Y') if member.join_date else '-' }}
+                                    </td>
+                                    <td data-sort="{{ dues_order[dues] }}">
+                                        {% if dues == 'lifetime' %}
+                                            <span class="badge bg-primary"><i class="bi bi-infinity"></i> Lifetime</span>
+                                        {% elif dues == 'paid' %}
+                                            <span class="badge bg-success"><i class="bi bi-check-circle"></i> Paid</span>
+                                        {% elif dues == 'grace' %}
+                                            <span class="badge bg-warning text-dark"><i class="bi bi-hourglass-split"></i> Grace Period</span>
+                                        {% else %}
+                                            <span class="badge bg-danger"><i class="bi bi-x-circle"></i> Expired</span>
+                                        {% endif %}
+                                    </td>
+                                    <td data-sort="{{ 'Enabled' if member.is_active else 'Disabled' }}">
+                                        {% if member.is_active %}
+                                            <span class="badge bg-success">Enabled</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">Disabled</span>
+                                        {% endif %}
+                                        {% if member.is_admin %}
+                                            <span class="badge bg-primary">Admin</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <a href="{{ url_for('admin_member_detail', member_id=member.id) }}" 
+                                           class="btn btn-sm btn-primary">
+                                            <i class="bi bi-eye"></i> View
+                                        </a>
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                {% if members|length == 0 %}
+                    <div class="alert alert-info">
+                        <i class="bi bi-info-circle"></i> No members found matching your search criteria.
+                    </div>
+                {% else %}
+                    <nav class="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-2">
+                        <small class="text-muted" id="pageInfo"></small>
+                        <ul class="pagination pagination-sm mb-0" id="pager"></ul>
+                    </nav>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// ADDED 2026-11-04: click a column header to sort, and show the list in pages
+(function () {
+    const table = document.getElementById('membersTable');
+    if (!table) return;
+    const tbody = table.querySelector('tbody');
+    const rows = Array.from(tbody.querySelectorAll('tr'));
+    const pageSizeSelect = document.getElementById('pageSize');
+    let page = 1;
+    let sortCol = null;
+    let sortDir = 1;
+
+    function render() {
+        const size = parseInt(pageSizeSelect.value, 10);
+        const total = rows.length;
+        const pages = size ? Math.max(1, Math.ceil(total / size)) : 1;
+        page = Math.min(page, pages);
+        const first = size ? (page - 1) * size : 0;
+        const last = size ? Math.min(first + size, total) : total;
+
+        rows.forEach((row, i) => {
+            row.style.display = (i >= first && i < last) ? '' : 'none';
+        });
+
+        const info = document.getElementById('pageInfo');
+        if (info) info.textContent = total ? `Showing ${first + 1}-${last} of ${total}` : '';
+
+        const pager = document.getElementById('pager');
+        if (!pager) return;
+        pager.innerHTML = '';
+        if (pages <= 1) return;
+        const addButton = (label, target, disabled, active) => {
+            const li = document.createElement('li');
+            li.className = 'page-item' + (disabled ? ' disabled' : '') + (active ? ' active' : '');
+            const a = document.createElement('a');
+            a.className = 'page-link';
+            a.href = '#';
+            a.textContent = label;
+            a.addEventListener('click', (e) => { e.preventDefault(); if (!disabled) { page = target; render(); } });
+            li.appendChild(a);
+            pager.appendChild(li);
+        };
+        addButton('Prev', page - 1, page === 1, false);
+        for (let p = 1; p <= pages; p++) addButton(String(p), p, false, p === page);
+        addButton('Next', page + 1, page === pages, false);
+    }
+
+    table.querySelectorAll('th.sortable').forEach((th) => {
+        th.addEventListener('click', () => {
+            const col = parseInt(th.dataset.col, 10);
+            const numeric = th.dataset.type === 'num';
+            sortDir = (sortCol === col) ? -sortDir : 1;
+            sortCol = col;
+            rows.sort((a, b) => {
+                let x = a.cells[col].dataset.sort ?? a.cells[col].textContent.trim();
+                let y = b.cells[col].dataset.sort ?? b.cells[col].textContent.trim();
+                if (numeric) return (parseFloat(x) - parseFloat(y)) * sortDir;
+                return x.localeCompare(y, undefined, { sensitivity: 'base' }) * sortDir;
+            });
+            rows.forEach((row) => tbody.appendChild(row));
+            table.querySelectorAll('th.sortable').forEach((h) => {
+                h.classList.remove('sorted');
+                h.querySelector('.sort-icon').className = 'bi bi-arrow-down-up sort-icon';
+            });
+            th.classList.add('sorted');
+            th.querySelector('.sort-icon').className = 'bi ' + (sortDir === 1 ? 'bi-sort-up' : 'bi-sort-down') + ' sort-icon';
+            page = 1;
+            render();
+        });
+    });
+
+    pageSizeSelect.addEventListener('change', () => { page = 1; render(); });
+    render();
+})();
+</script>
+{% endblock %}

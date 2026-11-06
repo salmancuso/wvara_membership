@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+{# ADDED 2026-11-04: Member Map, ZIP code bubbles within 75 miles of Campbell, CA #}
+
+{% block title %}Member Map - WVARA Membership{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+    #memberMap { height: 560px; width: 100%; border-radius: 0 0 var(--wv-radius) var(--wv-radius); }
+    @media (max-width: 767px) { #memberMap { height: 420px; } }
+    .map-stat { font-size: 1.8rem; font-weight: 800; line-height: 1; }
+    .map-popup h6 { margin: 0 0 .25rem; font-weight: 800; }
+    .map-popup ul { margin: .25rem 0 0; padding-left: 1rem; max-height: 180px; overflow-y: auto; }
+    .zip-label { background: transparent; border: 0; box-shadow: none; color: #fff; font-weight: 800; font-size: 11px; }
+    .zip-label::before { display: none; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <span class="wv-eyebrow" style="color: var(--wv-orange);">Admin</span>
+        <h2 class="mb-4"><i class="bi bi-geo-alt-fill"></i> Member Map</h2>
+    </div>
+</div>
+
+<div class="row mb-3">
+    <div class="col-12 col-md-4 mb-3">
+        <div class="card h-100"><div class="card-body">
+            <div class="map-stat">{{ nearby_count }}</div>
+            <div>Members within {{ radius_miles }} miles of {{ center.name }}</div>
+            <small class="text-muted">{{ nearby|length }} ZIP codes on the map</small>
+        </div></div>
+    </div>
+    <div class="col-6 col-md-4 mb-3">
+        <div class="card h-100"><div class="card-body">
+            <div class="map-stat">{{ far_count }}</div>
+            <div>Farther away (remote / virtual)</div>
+            <small class="text-muted">Listed below the map</small>
+        </div></div>
+    </div>
+    <div class="col-6 col-md-4 mb-3">
+        <div class="card h-100"><div class="card-body">
+            <div class="map-stat">{{ unmapped_count }}</div>
+            <div>Couldn't be mapped</div>
+            <small class="text-muted">Missing or unknown ZIP code</small>
+        </div></div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <span><i class="bi bi-map"></i> Where Members Live</span>
+        <small class="fw-normal" style="color: var(--wv-muted);">Bubble size = number of members in that ZIP. Tap a bubble for names.</small>
+    </div>
+    <div class="card-body p-0">
+        <div id="memberMap" role="img" aria-label="Map of member ZIP codes around {{ center.name }}"></div>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header"><i class="bi bi-list-ol"></i> ZIP Codes on the Map</div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped align-middle mb-0">
+                        <thead><tr><th>ZIP</th><th>City</th><th class="text-end">Members</th><th class="text-end">Miles</th></tr></thead>
+                        <tbody>
+                            {% for r in nearby %}
+                            <tr>
+                                <td><strong>{{ r.zip }}</strong></td>
+                                <td>{{ r.place }}</td>
+                                <td class="text-end">{{ r.count }}</td>
+                                <td class="text-end">{{ r.miles }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header"><i class="bi bi-laptop"></i> Outside {{ radius_miles }} Miles (Remote / Virtual)</div>
+            <div class="card-body">
+                {% if far_away %}
+                <div class="table-responsive">
+                    <table class="table table-sm table-striped align-middle mb-0">
+                        <thead><tr><th>Member</th><th>Location</th><th class="text-end">Miles</th></tr></thead>
+                        <tbody>
+                            {% for r in far_away %}
+                                {% for p in r.members %}
+                                <tr>
+                                    <td><a href="{{ p.url }}"><strong>{{ p.call_sign }}</strong></a> {{ p.name }}</td>
+                                    <td>{{ r.place }}, {{ r.state }} {{ r.zip }}</td>
+                                    <td class="text-end">{{ '%.0f'|format(r.miles) }}</td>
+                                </tr>
+                                {% endfor %}
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                    <p class="text-muted mb-0">Everyone lives within {{ radius_miles }} miles.</p>
+                {% endif %}
+            </div>
+        </div>
+
+        {% if unmapped %}
+        <div class="card">
+            <div class="card-header"><i class="bi bi-question-circle"></i> Couldn't Be Mapped</div>
+            <div class="card-body">
+                <p class="small text-muted">These ZIP codes are missing or not recognized. Fix them on the member's page.</p>
+                <ul class="mb-0">
+                    {% for r in unmapped %}
+                        {% for p in r.members %}
+                        <li><a href="{{ p.url }}"><strong>{{ p.call_sign }}</strong></a> {{ p.name }} <span class="text-muted">(ZIP: {{ r.zip }})</span></li>
+                        {% endfor %}
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+(function () {
+    const center = {{ center|tojson }};
+    const radiusMiles = {{ radius_miles|tojson }};
+    const zips = {{ nearby|tojson }};
+
+    if (typeof L === 'undefined') {
+        document.getElementById('memberMap').innerHTML =
+            '<div class="p-4 text-muted">The map could not load (no internet connection?). The tables below still work.</div>';
+        return;
+    }
+
+    const map = L.map('memberMap', { scrollWheelZoom: false, zoomSnap: 0.25 });
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 18,
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    }).addTo(map);
+
+    // 75 mile ring around Campbell
+    const ring = L.circle([center.lat, center.lon], {
+        radius: radiusMiles * 1609.34,
+        color: '#f36f21', weight: 2, dashArray: '6 6', fillColor: '#f36f21', fillOpacity: 0.04
+    }).addTo(map);
+
+    // Campbell marker
+    L.circleMarker([center.lat, center.lon], {
+        radius: 6, color: '#0b1220', weight: 2, fillColor: '#ffbf8e', fillOpacity: 1
+    }).addTo(map).bindTooltip(center.name + ' (map center)');
+
+    // One bubble per ZIP, sized by member count
+    const bubbles = [];
+    zips.forEach(function (z) {
+        const marker = L.circleMarker([z.lat, z.lon], {
+            radius: 5 + Math.sqrt(z.count) * 4,
+            color: '#ffffff', weight: 2,
+            fillColor: '#d71920', fillOpacity: 0.8
+        }).addTo(map);
+
+        // Build the popup with textContent so names are never treated as HTML
+        const box = document.createElement('div');
+        box.className = 'map-popup';
+        const title = document.createElement('h6');
+        title.textContent = z.zip + ' ' + z.place;
+        box.appendChild(title);
+        const meta = document.createElement('div');
+        meta.className = 'small text-muted';
+        meta.textContent = z.count + (z.count === 1 ? ' member' : ' members') + ' · ' + z.miles + ' mi from ' + center.name;
+        box.appendChild(meta);
+        const list = document.createElement('ul');
+        z.members.forEach(function (p) {
+            const li = document.createElement('li');
+            const a = document.createElement('a');
+            a.href = p.url;
+            a.textContent = p.call_sign;
+            li.appendChild(a);
+            li.appendChild(document.createTextNode(' ' + p.name));
+            list.appendChild(li);
+        });
+        box.appendChild(list);
+        marker.bindPopup(box);
+        if (z.count > 1) {
+            marker.bindTooltip(String(z.count), { permanent: true, direction: 'center', className: 'zip-label' });
+        }
+        bubbles.push(marker);
+    });
+
+    // Zoom to the members (falls back to the whole ring)
+    if (bubbles.length) {
+        map.fitBounds(L.featureGroup(bubbles).getBounds().pad(0.08));
+    } else {
+        map.fitBounds(ring.getBounds());
+    }
+})();
+</script>
+{% endblock %}

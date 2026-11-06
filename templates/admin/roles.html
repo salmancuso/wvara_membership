@@ -19,6 +19,7 @@
             </div>
             <div class="card-body">
                 <form method="POST" action="{{ url_for('admin_roles') }}">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="hidden" name="action" value="add">
                     
                     <div class="mb-3">
@@ -115,11 +116,15 @@
                                         <td><strong>{{ role.member.call_sign }}</strong></td>
                                         <td>{{ role.member.get_full_name() }}</td>
                                         <td>
-                                            <span class="badge bg-primary">{{ role.role_name }}</span>
+                                            {# CHANGED 2026-11-04: long role titles wrap instead of squeezing Duration #}
+                                            <span class="badge bg-primary text-start" style="white-space: normal; line-height: 1.3; display: inline-block; max-width: 200px;">{{ role.role_name }}</span>
                                         </td>
-                                        <td>{{ role.start_date.strftime('%Y-%m-%d') }}</td>
-                                        <td>
-                                            {% if years > 0 %}
+                                        <td class="text-nowrap">{{ role.start_date.strftime('%Y-%m-%d') }}</td>
+                                        <td class="text-nowrap">
+                                            {# CHANGED 2026-11-04: future start dates show "Starts Mon YYYY" #}
+                                            {% if duration_days < 0 %}
+                                                <span class="text-muted">Starts {{ role.start_date.strftime('%b %Y') }}</span>
+                                            {% elif years > 0 %}
                                                 {{ years }}y {{ months }}m
                                             {% else %}
                                                 {{ months }}m
@@ -142,6 +147,7 @@
                                                             <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                                                         </div>
                                                         <form method="POST" action="{{ url_for('admin_roles') }}">
+                                                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                                                             <input type="hidden" name="action" value="end">
                                                             <input type="hidden" name="role_id" value="{{ role.id }}">
                                                             <div class="modal-body">
@@ -191,9 +197,4 @@
 </script>
 {% endblock %}
 
-{% block extra_js %}
-<script>
-    // Pass current date to template
-    const now = new Date();
-</script>
-{% endblock %}
+{# REMOVED 2026-11-04: unused browser-side "now" (today's date now comes from app.py) #}

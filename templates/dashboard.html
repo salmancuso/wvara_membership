@@ -48,6 +48,15 @@
                 <a href="{{ url_for('change_password') }}" class="btn btn-outline-secondary btn-sm">
                     <i class="bi bi-key"></i> Change Password
                 </a>
+                <!-- ADDED 2026-11-04: member reports and map -->
+                <div class="d-grid gap-2 mt-3">
+                    <a href="{{ url_for('member_reports') }}" class="btn btn-outline-primary btn-sm">
+                        <i class="bi bi-people"></i> Member Directory
+                    </a>
+                    <a href="{{ url_for('member_map') }}" class="btn btn-outline-primary btn-sm">
+                        <i class="bi bi-geo-alt"></i> Member Map
+                    </a>
+                </div>
             </div>
         </div>
     </div>
@@ -62,7 +71,48 @@
                 <div class="row">
                     <div class="col-md-6">
                         <h6>Dues Status ({{ current_year }})</h6>
-                        {% if dues_status %}
+                        {# CHANGED 2026-11-04: uses the single dues status (lifetime / paid / grace / expired) #}
+                        {# ADDED 2026-11-05: family members are covered by their family head (first branch) #}
+                        {% if family_head %}
+                            {% if dues_state == 'lifetime' %}
+                                <div class="alert alert-success">
+                                    <i class="bi bi-infinity"></i> <strong>Lifetime Family Member</strong><br>
+                                    <small>Covered by {{ family_head.call_sign }}'s lifetime membership. No dues required. Thank you!</small>
+                                </div>
+                            {% elif dues_state == 'paid' %}
+                                <div class="alert alert-success">
+                                    <i class="bi bi-people-fill"></i> <strong>Covered</strong><br>
+                                    <small>You're covered by {{ family_head.call_sign }}'s family membership ({{ family_head.get_full_name() }}).</small>
+                                </div>
+                            {% elif dues_state == 'grace' %}
+                                <div class="alert alert-warning">
+                                    <i class="bi bi-hourglass-split"></i> <strong>Family Renewal Due</strong><br>
+                                    <small>{{ family_head.call_sign }}'s {{ current_year }} family dues are due. You're covered through the end of February.</small>
+                                </div>
+                            {% else %}
+                                <div class="alert alert-warning">
+                                    <i class="bi bi-exclamation-triangle-fill"></i> <strong>Family Dues Expired</strong><br>
+                                    <small>{{ family_head.call_sign }}'s family dues have expired. Please ask {{ family_head.call_sign }} to renew.</small>
+                                </div>
+                            {% endif %}
+                        {# ADDED 2026-11-05: family link waiting for an admin #}
+                        {% elif member.family_link_request and dues_state != 'lifetime' %}
+                            <div class="alert alert-info">
+                                <i class="bi bi-people"></i> <strong>Family Link Pending</strong><br>
+                                <small>Your family link to {{ member.family_link_request }} is waiting for an administrator. No need to pay yet.</small>
+                            </div>
+                        {% elif dues_state == 'lifetime' %}
+                            <div class="alert alert-success">
+                                <i class="bi bi-infinity"></i> <strong>Lifetime Member</strong><br>
+                                <small>No annual dues required. Thank you!</small>
+                            </div>
+                        {% elif dues_state == 'grace' %}
+                            <div class="alert alert-warning">
+                                <i class="bi bi-hourglass-split"></i> <strong>Renewal Due</strong><br>
+                                {# CHANGED 2026-11-05: amount follows membership type #}
+                                <small>Your {{ current_year }} dues{% if pay_dues %} (${{ '%.0f'|format(pay_dues.amounts[pay_dues.choice]) }}){% endif %} are due. You're covered through the end of February.</small>
+                            </div>
+                        {% elif dues_status %}
                             <div class="alert alert-success">
                                 <i class="bi bi-check-circle-fill"></i> <strong>Paid</strong><br>
                                 <small>
@@ -73,8 +123,34 @@
                         {% else %}
                             <div class="alert alert-warning">
                                 <i class="bi bi-exclamation-triangle-fill"></i> <strong>Not Paid</strong><br>
-                                <small>Please contact the treasurer to pay your dues.</small>
+                                {# CHANGED 2026-11-05: pay online instead of contacting the treasurer #}
+                                <small>Pay online with PayPal or a credit card below.</small>
                             </div>
+                        {% endif %}
+                        {# ADDED 2026-11-05: show next year's dues when they're already paid #}
+                        {% if next_year_payment and dues_state != 'lifetime' and not family_head %}{# CHANGED 2026-11-05 #}
+                            <div class="alert alert-success">
+                                <i class="bi bi-calendar-check-fill"></i> <strong>{{ current_year + 1 }} Paid</strong><br>
+                                <small>
+                                    Payment Date: {{ next_year_payment.payment_date.strftime('%B %d, %Y') }}<br>
+                                    Amount: ${{ "%.2f"|format(next_year_payment.amount) }}<br>
+                                    You're covered through December 31, {{ current_year + 1 }}.
+                                </small>
+                            </div>
+                        {% endif %}
+                        {# ADDED 2026-11-05: Pay Dues button opens the lightbox #}
+                        {% if pay_dues and pay_dues.needs_payment %}
+                            <button type="button" class="btn btn-primary w-100 mb-3" data-bs-toggle="modal" data-bs-target="#payDuesModal">
+                                <i class="bi bi-credit-card"></i>
+                                {% if dues_state == 'paid' %}Renew for {{ current_year + 1 }}{% else %}Pay Dues{% endif %}
+                            </button>
+                        {% endif %}
+                        {# ADDED 2026-11-05: family heads see who their family dues cover #}
+                        {% if family_members %}
+                            <p class="small text-muted mb-0">
+                                <i class="bi bi-people"></i> Your family:
+                                {% for fm in family_members %}{{ fm.call_sign }} ({{ fm.first_name }}){% if not loop.last %}, {% endif %}{% endfor %}
+                            </p>
                         {% endif %}
                     </div>
                     

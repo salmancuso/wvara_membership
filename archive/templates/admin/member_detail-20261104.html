@@ -1,0 +1,334 @@
+{% extends "base.html" %}
+
+{% block title %}{{ member.call_sign }} - WVARA Membership{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <h2 class="mb-4">
+            <i class="bi bi-person-circle"></i> {{ member.get_full_name() }}
+            <span class="badge bg-secondary">{{ member.call_sign }}</span>
+        </h2>
+        <a href="{{ url_for('admin_members') }}" class="btn btn-secondary mb-3">
+            <i class="bi bi-arrow-left"></i> Back to Members List
+        </a>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Member Information -->
+    <div class="col-md-8">
+        <div class="card mb-3">
+            <div class="card-header">
+                <i class="bi bi-info-circle"></i> Member Information
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('admin_member_detail', member_id=member.id) }}">
+                    <input type="hidden" name="action" value="update_info">
+                    
+                    <div class="mb-3">
+                        <label for="call_sign" class="form-label">Call Sign</label>
+                        <input type="text" class="form-control" id="call_sign" name="call_sign" 
+                               value="{{ member.call_sign }}" required style="text-transform: uppercase;">
+                        <small class="form-text text-muted">Changing this will update the member's login username</small>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">First Name</label>
+                            <input type="text" class="form-control" name="first_name" value="{{ member.first_name }}" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Last Name</label>
+                            <input type="text" class="form-control" name="last_name" value="{{ member.last_name }}" required>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Email</label>
+                            <input type="email" class="form-control" name="email" value="{{ member.email }}" required>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Phone</label>
+                            <input type="tel" class="form-control" name="phone" value="{{ member.phone or '' }}">
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Address</label>
+                        <input type="text" class="form-control" name="address" value="{{ member.address or '' }}">
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-5 mb-3">
+                            <label class="form-label">City</label>
+                            <input type="text" class="form-control" name="city" value="{{ member.city or '' }}">
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label">State</label>
+                            <input type="text" class="form-control" name="state" value="{{ member.state or '' }}" maxlength="2">
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">ZIP</label>
+                            <input type="text" class="form-control" name="zip_code" value="{{ member.zip_code or '' }}">
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">FCC License Class</label>
+                            <select class="form-select" name="fcc_license_class">
+                                <option value="">Select license class</option>
+                                <option value="Technician" {% if member.fcc_license_class == 'Technician' %}selected{% endif %}>Technician</option>
+                                <option value="General" {% if member.fcc_license_class == 'General' %}selected{% endif %}>General</option>
+                                <option value="Amateur Extra" {% if member.fcc_license_class == 'Amateur Extra' %}selected{% endif %}>Amateur Extra</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label">Membership Type</label>
+                            <select class="form-select" name="membership_type" required>
+                                <option value="Individual" {% if member.membership_type == 'Individual' %}selected{% endif %}>Individual</option>
+                                <option value="Family" {% if member.membership_type == 'Family' %}selected{% endif %}>Family</option>
+                                <option value="Lifetime" {% if member.membership_type == 'Lifetime' %}selected{% endif %}>Lifetime</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Join Date</label>
+                        <input type="date" class="form-control" name="join_date" 
+                               value="{{ member.join_date.strftime('%Y-%m-%d') }}" required>
+                    </div>
+                    
+                    <h6 class="mt-3">Emergency Contact</h6>
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Name</label>
+                            <input type="text" class="form-control" name="emergency_contact_name" value="{{ member.emergency_contact_name }}" required>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Phone</label>
+                            <input type="tel" class="form-control" name="emergency_contact_phone" value="{{ member.emergency_contact_phone }}" required>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label">Relationship</label>
+                            <input type="text" class="form-control" name="emergency_contact_relationship" value="{{ member.emergency_contact_relationship or '' }}">
+                        </div>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-check-circle"></i> Save Changes
+                    </button>
+                </form>
+            </div>
+        </div>
+        
+        <!-- Dues History -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <i class="bi bi-credit-card"></i> Dues History
+            </div>
+            <div class="card-body">
+                {% if dues_history %}
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Year</th>
+                                <th>Amount</th>
+                                <th>Payment Date</th>
+                                <th>Method</th>
+                                <th>Recorded By</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for payment in dues_history %}
+                                <tr>
+                                    <td>{{ payment.year }}</td>
+                                    <td>${{ "%.2f"|format(payment.amount) }}</td>
+                                    <td>{{ payment.payment_date.strftime('%Y-%m-%d') }}</td>
+                                    <td>{{ payment.payment_method }}</td>
+                                    <td>{{ payment.created_by or '-' }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                {% else %}
+                    <p class="text-muted">No dues payment history.</p>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Role History -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <i class="bi bi-award"></i> Leadership History
+            </div>
+            <div class="card-body">
+                {% if role_history %}
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Role</th>
+                                <th>Start Date</th>
+                                <th>End Date</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for role in role_history %}
+                                <tr>
+                                    <td>{{ role.role_name }}</td>
+                                    <td>{{ role.start_date.strftime('%Y-%m-%d') }}</td>
+                                    <td>{{ role.end_date.strftime('%Y-%m-%d') if role.end_date else '-' }}</td>
+                                    <td>
+                                        {% if role.is_current %}
+                                            <span class="badge bg-success">Current</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">Past</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                {% else %}
+                    <p class="text-muted">No leadership history.</p>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Attendance History -->
+        <div class="card">
+            <div class="card-header">
+                <i class="bi bi-calendar-check"></i> Recent Meeting Attendance
+            </div>
+            <div class="card-body">
+                {% if attendance_history %}
+                    <table class="table table-sm">
+                        <thead>
+                            <tr>
+                                <th>Meeting Date</th>
+                                <th>Attended</th>
+                                <th>Recorded By</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for attendance in attendance_history %}
+                                <tr>
+                                    <td>{{ attendance.meeting_date.strftime('%Y-%m-%d') }}</td>
+                                    <td>
+                                        {% if attendance.attended %}
+                                            <i class="bi bi-check-circle-fill text-success"></i> Yes
+                                        {% else %}
+                                            <i class="bi bi-x-circle-fill text-danger"></i> No
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ attendance.recorded_by or '-' }}</td>
+                                </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                {% else %}
+                    <p class="text-muted">No attendance history.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <!-- Actions Sidebar -->
+    <div class="col-md-4">
+        <div class="card mb-3">
+            <div class="card-header">
+                <i class="bi bi-image"></i> Profile Photo
+            </div>
+            <div class="card-body text-center">
+                {% if member.qrz_photo_url %}
+                    <img src="{{ member.qrz_photo_url }}" alt="{{ member.call_sign }}" class="profile-photo mb-3" style="width: 150px; height: 150px; object-fit: cover;">
+                {% else %}
+                    <i class="bi bi-person-circle mb-3" style="font-size: 150px; color: var(--primary-color);"></i>
+                {% endif %}
+                
+                <form method="POST" action="{{ url_for('admin_member_detail', member_id=member.id) }}">
+                    <input type="hidden" name="action" value="update_qrz_photo">
+                    <button type="submit" class="btn btn-sm btn-outline-primary">
+                        <i class="bi bi-arrow-repeat"></i> Update from QRZ
+                    </button>
+                </form>
+            </div>
+        </div>
+        
+        <div class="card mb-3">
+            <div class="card-header">
+                <i class="bi bi-gear"></i> Member Status
+            </div>
+            <div class="card-body">
+                <p><strong>Call Sign:</strong> {{ member.call_sign }}</p>
+                <p><strong>Join Date:</strong> {{ member.join_date.strftime('%B %d, %Y') }}</p>
+                <p><strong>Member For:</strong> {{ member.get_membership_duration() }}</p>
+                <p><strong>Last Contact:</strong> {{ member.last_contact.strftime('%Y-%m-%d %H:%M') if member.last_contact else 'Never' }}</p>
+                
+                <hr>
+                
+                <p><strong>Status:</strong></p>
+                {% if member.is_active %}
+                    <span class="badge bg-success mb-2">Active</span>
+                {% else %}
+                    <span class="badge bg-danger mb-2">Inactive</span>
+                {% endif %}
+                
+                {% if member.is_admin %}
+                    <span class="badge bg-primary mb-2">Administrator</span>
+                {% endif %}
+                
+                {% if member.is_dues_current() %}
+                    <span class="badge bg-success mb-2">Dues Current</span>
+                {% else %}
+                    <span class="badge bg-danger mb-2">Dues Expired</span>
+                {% endif %}
+            </div>
+        </div>
+        
+        <div class="card mb-3">
+            <div class="card-header">
+                <i class="bi bi-lightning"></i> Quick Actions
+            </div>
+            <div class="card-body d-grid gap-2">
+                <form method="POST" action="{{ url_for('admin_member_detail', member_id=member.id) }}">
+                    <input type="hidden" name="action" value="toggle_admin">
+                    <button type="submit" class="btn btn-warning w-100">
+                        <i class="bi bi-shield"></i> 
+                        {% if member.is_admin %}Revoke{% else %}Grant{% endif %} Admin Access
+                    </button>
+                </form>
+                
+                <form method="POST" action="{{ url_for('admin_member_detail', member_id=member.id) }}">
+                    <input type="hidden" name="action" value="toggle_active">
+                    <button type="submit" class="btn btn-info w-100">
+                        <i class="bi bi-toggle-on"></i> 
+                        {% if member.is_active %}Deactivate{% else %}Activate{% endif %} Member
+                    </button>
+                </form>
+                
+                <form method="POST" action="{{ url_for('admin_member_detail', member_id=member.id) }}" 
+                      onsubmit="return confirm('This will generate a new temporary password. Continue?');">
+                    <input type="hidden" name="action" value="reset_password">
+                    <button type="submit" class="btn btn-danger w-100">
+                        <i class="bi bi-key"></i> Reset Password
+                    </button>
+                </form>
+                
+                <hr>
+                
+                <form method="POST" action="{{ url_for('admin_member_detail', member_id=member.id) }}" 
+                      onsubmit="return confirm('Are you sure you want to PERMANENTLY DELETE this member?\n\nThis will delete:\n- Member account\n- Dues payment history\n- Attendance records\n- Role history\n\nThis action CANNOT be undone!');">
+                    <input type="hidden" name="action" value="delete_member">
+                    <button type="submit" class="btn btn-danger w-100">
+                        <i class="bi bi-trash"></i> Delete Member
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,263 @@
+{
+ "_source": "api.zippopotam.us (GeoNames), pulled 2026-11-04",
+ "zips": {
+  "80203": {
+   "lat": 39.7313,
+   "lon": -104.9811,
+   "place": "Denver",
+   "state": "CO"
+  },
+  "83661": {
+   "lat": 44.0782,
+   "lon": -116.9203,
+   "place": "Payette",
+   "state": "ID"
+  },
+  "84062": {
+   "lat": 40.372,
+   "lon": -111.7333,
+   "place": "Pleasant Grove",
+   "state": "UT"
+  },
+  "94022": {
+   "lat": 37.3814,
+   "lon": -122.1258,
+   "place": "Los Altos",
+   "state": "CA"
+  },
+  "94024": {
+   "lat": 37.3547,
+   "lon": -122.0862,
+   "place": "Los Altos",
+   "state": "CA"
+  },
+  "94028": {
+   "lat": 37.3702,
+   "lon": -122.2182,
+   "place": "Portola Valley",
+   "state": "CA"
+  },
+  "94061": {
+   "lat": 37.4647,
+   "lon": -122.2304,
+   "place": "Redwood City",
+   "state": "CA"
+  },
+  "94085": {
+   "lat": 37.3886,
+   "lon": -122.0177,
+   "place": "Sunnyvale",
+   "state": "CA"
+  },
+  "94086": {
+   "lat": 37.3764,
+   "lon": -122.0238,
+   "place": "Sunnyvale",
+   "state": "CA"
+  },
+  "94087": {
+   "lat": 37.3502,
+   "lon": -122.0349,
+   "place": "Sunnyvale",
+   "state": "CA"
+  },
+  "94089": {
+   "lat": 37.3983,
+   "lon": -122.0006,
+   "place": "Sunnyvale",
+   "state": "CA"
+  },
+  "94306": {
+   "lat": 37.418,
+   "lon": -122.1274,
+   "place": "Palo Alto",
+   "state": "CA"
+  },
+  "94536": {
+   "lat": 37.5605,
+   "lon": -121.9999,
+   "place": "Fremont",
+   "state": "CA"
+  },
+  "95008": {
+   "lat": 37.2803,
+   "lon": -121.9539,
+   "place": "Campbell",
+   "state": "CA"
+  },
+  "95009": {
+   "lat": 37.2872,
+   "lon": -121.9488,
+   "place": "Campbell",
+   "state": "CA"
+  },
+  "95014": {
+   "lat": 37.318,
+   "lon": -122.0449,
+   "place": "Cupertino",
+   "state": "CA"
+  },
+  "95030": {
+   "lat": 37.2296,
+   "lon": -121.9834,
+   "place": "Los Gatos",
+   "state": "CA"
+  },
+  "95032": {
+   "lat": 37.2417,
+   "lon": -121.9554,
+   "place": "Los Gatos",
+   "state": "CA"
+  },
+  "95033": {
+   "lat": 37.1539,
+   "lon": -121.9816,
+   "place": "Los Gatos",
+   "state": "CA"
+  },
+  "95035": {
+   "lat": 37.4352,
+   "lon": -121.895,
+   "place": "Milpitas",
+   "state": "CA"
+  },
+  "95037": {
+   "lat": 37.1353,
+   "lon": -121.6501,
+   "place": "Morgan Hill",
+   "state": "CA"
+  },
+  "95051": {
+   "lat": 37.3483,
+   "lon": -121.9844,
+   "place": "Santa Clara",
+   "state": "CA"
+  },
+  "95054": {
+   "lat": 37.3924,
+   "lon": -121.9623,
+   "place": "Santa Clara",
+   "state": "CA"
+  },
+  "95070": {
+   "lat": 37.2713,
+   "lon": -122.0227,
+   "place": "Saratoga",
+   "state": "CA"
+  },
+  "95111": {
+   "lat": 37.2827,
+   "lon": -121.8265,
+   "place": "San Jose",
+   "state": "CA"
+  },
+  "95117": {
+   "lat": 37.3108,
+   "lon": -121.9623,
+   "place": "San Jose",
+   "state": "CA"
+  },
+  "95118": {
+   "lat": 37.2568,
+   "lon": -121.8896,
+   "place": "San Jose",
+   "state": "CA"
+  },
+  "95120": {
+   "lat": 37.2144,
+   "lon": -121.8574,
+   "place": "San Jose",
+   "state": "CA"
+  },
+  "95123": {
+   "lat": 37.2458,
+   "lon": -121.8306,
+   "place": "San Jose",
+   "state": "CA"
+  },
+  "95124": {
+   "lat": 37.2563,
+   "lon": -121.9229,
+   "place": "San Jose",
+   "state": "CA"
+  },
+  "95125": {
+   "lat": 37.296,
+   "lon": -121.8939,
+   "place": "San Jose",
+   "state": "CA"
+  },
+  "95126": {
+   "lat": 37.3249,
+   "lon": -121.9153,
+   "place": "San Jose",
+   "state": "CA"
+  },
+  "95127": {
+   "lat": 37.3692,
+   "lon": -121.8208,
+   "place": "San Jose",
+   "state": "CA"
+  },
+  "95129": {
+   "lat": 37.3066,
+   "lon": -122.0002,
+   "place": "San Jose",
+   "state": "CA"
+  },
+  "95130": {
+   "lat": 37.2886,
+   "lon": -121.9818,
+   "place": "San Jose",
+   "state": "CA"
+  },
+  "95132": {
+   "lat": 37.4031,
+   "lon": -121.8585,
+   "place": "San Jose",
+   "state": "CA"
+  },
+  "95135": {
+   "lat": 37.2974,
+   "lon": -121.7562,
+   "place": "San Jose",
+   "state": "CA"
+  },
+  "95136": {
+   "lat": 37.2685,
+   "lon": -121.849,
+   "place": "San Jose",
+   "state": "CA"
+  },
+  "95139": {
+   "lat": 37.2252,
+   "lon": -121.7687,
+   "place": "San Jose",
+   "state": "CA"
+  },
+  "95148": {
+   "lat": 37.3304,
+   "lon": -121.7913,
+   "place": "San Jose",
+   "state": "CA"
+  },
+  "95150": {
+   "lat": 37.3866,
+   "lon": -121.897,
+   "place": "San Jose",
+   "state": "CA"
+  },
+  "95901": {
+   "lat": 39.1663,
+   "lon": -121.5105,
+   "place": "Marysville",
+   "state": "CA"
+  },
+  "98368": {
+   "lat": 48.104,
+   "lon": -122.7945,
+   "place": "Port Townsend",
+   "state": "WA"
+  }
+ }
+}
