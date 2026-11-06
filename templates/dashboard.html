@@ -243,18 +243,25 @@
                 <div class="row">
                     <div class="col-md-4">
                         <h6><i class="bi bi-calendar-event"></i> Meetings</h6>
-                        <p>First Wednesday of each month<br>
-                        7:00 PM</p>
+                        {# CHANGED 2026-11-06: meeting text comes from CLUB_MEETING_TEXT / CLUB_MEETING_TIME in app.py #}
+                        <p>{{ club_meeting_text }}<br>
+                        {{ club_meeting_time }}</p>
                     </div>
+                    {# CHANGED 2026-11-06: President and Treasurer come from the Roles page; email is the role address #}
+                    {% set pres = club_officers['President'] %}
+                    {% set treas = club_officers['Treasurer'] %}
                     <div class="col-md-4">
                         <h6><i class="bi bi-envelope"></i> Contact</h6>
                         <p>For questions or concerns, contact:<br>
-                        President: KK6IK</p>
+                        President:
+                        {% if pres.member %}{{ pres.member.get_full_name() }}, {{ pres.member.call_sign }}<br>{% endif %}
+                        <a href="mailto:{{ pres.email }}">{{ pres.email }}</a></p>
                     </div>
                     <div class="col-md-4">
                         <h6><i class="bi bi-credit-card"></i> Dues</h6>
                         <p>Annual dues are paid via PayPal<br>
-                        Contact treasurer for payment information</p>
+                        Questions? Email the Treasurer{% if treas.member %} ({{ treas.member.get_full_name() }}, {{ treas.member.call_sign }}){% endif %}:<br>
+                        <a href="mailto:{{ treas.email }}">{{ treas.email }}</a></p>
                     </div>
                 </div>
             </div>

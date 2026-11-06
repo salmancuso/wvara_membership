@@ -2032,6 +2032,42 @@ def inject_viewer_is_admin():
     return {'viewer_is_admin': bool(viewer and viewer.is_admin)}
 
 
+# ADDED 2026-11-06: Club Information card and login page text, in one place
+CLUB_MEETING_TEXT = 'Second Wednesday of each month'
+CLUB_MEETING_TIME = '7:00 PM'
+OFFICER_EMAILS = {
+    'President': 'president@wvara.org',
+    'Treasurer': 'treasurer@wvara.org',
+}
+
+
+def current_officer(role_title):
+    """The member holding a current, already-started role with exactly this title (case-insensitive), or None.
+    Exact match, so 'Vice President' never counts as 'President'. If two people hold it, the latest start wins."""
+    today = date.today()
+    roles = RoleHistory.query.filter(RoleHistory.is_current == True).all()  # noqa: E712
+    matches = [r for r in roles
+               if (r.role_name or '').strip().lower() == role_title.lower()
+               and r.start_date and r.start_date <= today
+               and (r.end_date is None or r.end_date >= today)]
+    if not matches:
+        return None
+    return max(matches, key=lambda r: r.start_date).member
+
+
+@app.context_processor
+def inject_club_info():
+    officers = {}
+    for title, email in OFFICER_EMAILS.items():
+        try:
+            member = current_officer(title)
+        except Exception:
+            member = None
+        officers[title] = {'member': member, 'email': email}
+    return {'club_meeting_text': CLUB_MEETING_TEXT, 'club_meeting_time': CLUB_MEETING_TIME,
+            'club_officers': officers}
+
+
 @app.route('/admin/reports/directory')
 @admin_required
 def report_directory():
