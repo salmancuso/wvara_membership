@@ -313,6 +313,39 @@ def generate_temp_password(length=12):
     return password
 
 
+# ADDED 2026-11-06: easy-to-read temporary passwords (for emails), e.g. "Maple-Radio-4827".
+# Two words from this list plus four digits: about 400 million combinations. Always temporary:
+# the forced-change screen makes the member pick their own password at first login.
+TEMP_PASSWORD_WORDS = (
+    'Acorn', 'Amber', 'Anchor', 'Antenna', 'Apple', 'Arrow', 'Aspen', 'Atlas', 'Badge', 'Banjo',
+    'Basil', 'Beacon', 'Birch', 'Bison', 'Blaze', 'Bramble', 'Brook', 'Cabin', 'Cactus', 'Camel',
+    'Canyon', 'Carbon', 'Cedar', 'Cello', 'Cherry', 'Cider', 'Clover', 'Cobalt', 'Comet', 'Condor',
+    'Copper', 'Coral', 'Cosmos', 'Cricket', 'Crystal', 'Cypress', 'Daisy', 'Delta', 'Desert', 'Dipole',
+    'Dolphin', 'Dragon', 'Eagle', 'Echo', 'Ember', 'Falcon', 'Fern', 'Fiddle', 'Flint', 'Forest',
+    'Fox', 'Galaxy', 'Garnet', 'Geyser', 'Ginger', 'Glacier', 'Granite', 'Grove', 'Harbor', 'Hawk',
+    'Hazel', 'Heron', 'Hickory', 'Honey', 'Horizon', 'Indigo', 'Iris', 'Island', 'Ivory', 'Jade',
+    'Jasper', 'Juniper', 'Kayak', 'Kelp', 'Kestrel', 'Kiwi', 'Lagoon', 'Lantern', 'Laurel', 'Lava',
+    'Lemon', 'Lilac', 'Lotus', 'Lunar', 'Magnet', 'Mango', 'Maple', 'Marble', 'Meadow', 'Mesa',
+    'Meteor', 'Mint', 'Monarch', 'Morse', 'Mustang', 'Nebula', 'Nectar', 'Nickel', 'Nova', 'Oak',
+    'Oasis', 'Ocean', 'Olive', 'Onyx', 'Orbit', 'Orchid', 'Osprey', 'Otter', 'Owl', 'Pacific',
+    'Panda', 'Pebble', 'Pepper', 'Phoenix', 'Pine', 'Planet', 'Plaza', 'Polar', 'Poppy', 'Prairie',
+    'Pulsar', 'Quartz', 'Quail', 'Radar', 'Radio', 'Rainbow', 'Raven', 'Redwood', 'Reef', 'Ridge',
+    'River', 'Robin', 'Rocket', 'Saddle', 'Sage', 'Salmon', 'Sapphire', 'Sequoia', 'Shadow', 'Sierra',
+    'Signal', 'Silver', 'Simplex', 'Sky', 'Slate', 'Solar', 'Sparrow', 'Spruce', 'Stellar', 'Summit',
+    'Sunset', 'Swift', 'Tango', 'Thistle', 'Thunder', 'Tiger', 'Timber', 'Topaz', 'Tower', 'Trail',
+    'Tulip', 'Tundra', 'Valley', 'Velvet', 'Violet', 'Volcano', 'Walnut', 'Willow', 'Window', 'Winter',
+    'Wolf', 'Yankee', 'Zebra', 'Zenith', 'Zephyr', 'Zinnia', 'Kilo', 'Lima', 'Oscar', 'Romeo',
+    'Victor', 'Whiskey', 'Bravo', 'Charlie', 'Foxtrot', 'Hotel', 'Juliet', 'Mike', 'Papa',
+)
+
+
+def generate_readable_temp_password() -> str:
+    """'Word-Word-1234': easy to read from an email, random enough for a one-time temporary password"""
+    first = secrets.choice(TEMP_PASSWORD_WORDS)
+    second = secrets.choice([w for w in TEMP_PASSWORD_WORDS if w != first])
+    return f'{first}-{second}-{secrets.randbelow(9000) + 1000}'
+
+
 def scrape_qrz_photo(call_sign):
     """Scrape photo URL from QRZ.com"""
     try:
@@ -1242,15 +1275,18 @@ def admin_add_member():
             is_licensed=is_licensed,  # ADDED 2026-11-05
         )
 
-        # Set initial password to call sign
-        new_member.set_password(call_sign)
+        # CHANGED 2026-11-06: random temporary password instead of the call sign (anyone could guess that)
+        temp_password = generate_readable_temp_password()
+        new_member.set_password(temp_password)
         new_member.password_is_temporary = True
         
         db.session.add(new_member)
         db.session.commit()
         
-        log_admin_action('Added new member', call_sign, f'Initial password: {call_sign}')
-        flash(f'Member {call_sign} added successfully! Initial password: {call_sign}', 'success')
+        # CHANGED 2026-11-06: the log never holds passwords; the admin sees the temporary one once, here
+        log_admin_action('Added new member', call_sign, 'Temporary password issued (shown once to the admin)')
+        flash(f'Member {call_sign} added successfully! Temporary password (copy it now, it is shown only once): '
+              f'{temp_password}', 'success')
         
         return redirect(url_for('admin_member_detail', member_id=new_member.id))
     

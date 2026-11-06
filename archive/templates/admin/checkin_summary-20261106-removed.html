@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{# ADDED 2026-11-06: Check-In summary, shown after "Done" #}
+
+{% block title %}Check-In Summary - WVARA Membership{% endblock %}
+
+{% block content %}
+<div style="max-width: 720px; margin: 0 auto;">
+    <h2 class="mb-1"><i class="bi bi-clipboard-check"></i> Check-In Summary</h2>
+    <p class="text-muted mb-3">{{ ev_label }}</p>
+
+    <div class="row g-2 mb-3 text-center">
+        <div class="col-4"><div class="card"><div class="card-body py-2">
+            <div class="fs-3 fw-bold">{{ attendees|length }}</div><small class="text-muted">members</small></div></div></div>
+        <div class="col-4"><div class="card"><div class="card-body py-2">
+            <div class="fs-3 fw-bold">{{ guests }}</div><small class="text-muted">guests</small></div></div></div>
+        <div class="col-4"><div class="card"><div class="card-body py-2">
+            <div class="fs-3 fw-bold text-danger">{{ expired|length }}</div><small class="text-muted">dues expired</small></div></div></div>
+    </div>
+
+    {% if expired %}
+    <div class="card mb-3 border-danger">
+        <div class="card-header bg-danger text-white"><i class="bi bi-exclamation-triangle"></i> Attended with expired dues</div>
+        <div class="list-group list-group-flush">
+            {% for x in expired %}
+            <div class="list-group-item">
+                <strong>{{ x.member.call_sign }}</strong> {{ x.member.get_full_name() }}
+                <small class="text-muted">(last paid {{ x.info.last_paid or 'never' }}{% if x.info.head %}, family of {{ x.info.head }}{% endif %})</small>
+            </div>
+            {% endfor %}
+        </div>
+        <div class="card-body">
+            <a class="btn btn-outline-danger w-100"
+               href="mailto:{{ treasurer_email }}?subject={{ ('Expired dues at ' ~ ev_label)|urlencode }}&body={{ treasurer_body|urlencode }}">
+                <i class="bi bi-envelope"></i> Email this list to the Treasurer
+            </a>
+        </div>
+    </div>
+    {% endif %}
+
+    <div class="card mb-3">
+        <div class="card-header"><i class="bi bi-people"></i> Members checked in</div>
+        <div class="list-group list-group-flush">
+            {% for x in attendees %}
+            <div class="list-group-item d-flex justify-content-between">
+                <span><strong>{{ x.member.call_sign }}</strong> {{ x.member.get_full_name() }}</span>
+                {% if x.info.status == 'expired' %}<span class="badge bg-danger align-self-center">Dues expired</span>
+                {% elif x.info.status == 'grace' %}<span class="badge bg-warning text-dark align-self-center">Grace</span>{% endif %}
+            </div>
+            {% else %}
+            <div class="list-group-item text-muted">Nobody checked in yet.</div>
+            {% endfor %}
+        </div>
+    </div>
+
+    <div class="d-grid gap-2 mb-4">
+        <a href="{{ url_for('admin_checkin', **ev_args) }}" class="btn btn-outline-primary">
+            <i class="bi bi-arrow-left"></i> Back to Check-In (keep going)
+        </a>
+        <a href="{{ url_for('admin_attendance') }}" class="btn btn-outline-secondary">Attendance history</a>
+    </div>
+</div>
+{% endblock %}

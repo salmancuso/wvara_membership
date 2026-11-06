@@ -24,7 +24,8 @@
                 <form method="POST" action="{{ url_for('admin_add_member') }}">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <div class="alert alert-info">
-                        <i class="bi bi-info-circle"></i> Initial password will be set to the member's call sign.
+                        {# CHANGED 2026-11-06 #}
+                        <i class="bi bi-info-circle"></i> A random temporary password (like Maple-Radio-4827) is created and shown once after you save.
                         They will be required to change it on first login.
                     </div>
                     
@@ -181,7 +182,7 @@
             </div>
             <div class="card-body">
                 <p><strong>Initial Password:</strong></p>
-                <p class="small">The new member's password will be set to their call sign. They will be required to change it on first login.</p>
+                <p class="small">A random temporary password is created and shown once after you save. Send it to the member privately; they will be required to change it on first login.</p>{# CHANGED 2026-11-06 #}
                 
                 <hr>
                 
