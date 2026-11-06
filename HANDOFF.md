@@ -1,8 +1,8 @@
 # WVARA Membership: Handoff Notes
 
-*Written November 5, 2026 at the end of a two-day build session with Claude. Updated late Nov 5 after the self sign-up build, deploy and database reset.*
-*Updated Nov 6, 2026 (morning): created `archive/` for all dated backups (section 11), added `archive/` to the `deploy.sh` excludes, and logged the equipment inventory idea (section 8, item 11). The cleaned-up member CSV for the roster load is coming from Sal but has not been reviewed yet.*
-*New session? Start by reading this file, then ask Sal what's next. **Plan for Nov 6: (1) SSH key setup first (section 8, item 4; Sal typed the server password 3+ times per deploy and kept hitting typos), then (2) the one-time roster load from an Excel or CSV member list (section 8, item 3).***
+*Started November 5, 2026 after a two-day build session with Claude. **Rewritten end of day November 6, 2026** after the roster load, admin notes, Activity Log, access levels, Club Information card and temporary passwords all went live. Earlier versions are in `archive/HANDOFF-*.md`.*
+
+*New session? Read this file, then ask Sal what's next. **Up next (section 8):** send members their login emails, push the latest commit, give the Secretary a Records Manager login, then the self check-in kiosk.*
 
 ---
 
@@ -11,13 +11,15 @@
 | | |
 |---|---|
 | **What** | Membership tool for the West Valley Amateur Radio Association (WVARA) |
-| **Owner / developer** | Sal Mancuso, W6SAL (admin) |
-| **Live URL** | https://salmancuso.com/tools/wvara |
+| **Owner / developer** | Sal Mancuso, W6SAL (System Administrator) |
+| **Live URL** | https://salmancuso.com/tools/wvara (login: `/tools/wvara/login`) |
 | **Server path** | `/var/www/html/salmancuso/tools/wvara` |
 | **Local path (Mac)** | `/Users/smancuso/Documents/Personal/Sal/programming/wvara_membership` |
+| **GitHub** | Private repo `github.com/salmancuso/wvara_membership`, branch `main` (section 6) |
 | **Stack** | Flask 3.0, Flask-SQLAlchemy, SQLite, Bootstrap 5.3, Leaflet 1.9.4, ReportLab |
-| **People** | Scott KK6IK (current president; moving to the East Coast, so likely busy). Eric Hendrickson W6HS (incoming president, January 2027; admin; testing the tool now). |
-| **Data** | **Reset Nov 5, 2026** (`reset_to_core_members.py`) on the server and the Mac. Only W6SAL and W6HS (both admins) remain, with no dues, roles, attendance, PayPal notices or old admin log. Real roster not loaded yet. Pre-reset copies: `instance/wvara_membership-before-reset-20261105-*.db` (server and Mac) and `/root/wvara-backups/wvara_membership-20261105-214914.db`. |
+| **People** | Scott KK6IK (current President; moving to the East Coast). Eric Hendrickson W6HS (President starting January 2027; System Administrator). |
+| **Live data (Nov 6, 2026)** | **140 members** loaded from the old club database: 102 Individual, 36 Family (15 family heads), 2 Lifetime; 120 can log in, 18 are inactive (incl. NT6F, Silent Key). 126 dues records on the server. Roles re-entered on the live site (Scott President now, Eric President from Jan 2027, Treasurer). **Every member except W6SAL and W6HS has a random temporary password**; emails with those passwords have not gone out yet. |
+| **Backups of the live database** | `/root/wvara-backups/` (one per deploy), plus `instance/wvara_membership-before-load-20261106-105630.db` and `instance/wvara_membership-before-temp-passwords-*.db` on the server |
 
 ---
 
@@ -25,13 +27,14 @@
 
 - **Ask before writing code.** Explain the plan, get a yes, then build.
 - **Add-only edits.** Preserve working code; don't restructure or "clean up" unrelated code.
-- **Dated backups** before changing a file: `name-YYYYMMDD.ext` (add `-v2`, `-v3` for more the same day). Mark changes with `# ADDED 2026-11-05` / `# CHANGED ...` comments.
-  - **CHANGED Nov 6, 2026: backups go in `archive/`, not next to the live file.** Mirror the live path: a backup of `templates/admin/members.html` is `archive/templates/admin/members-20261106.html`; a backup of `app.py` is `archive/app-20261106.py`. Database copies are the exception and stay in `instance/` (see section 11).
+- **Dated backups before changing a file, saved in `archive/`** (not next to the live file), mirroring the live path: `archive/app-20261106.py`, `archive/templates/admin/members-20261106.html`. Add `-v2`, `-v3` for more the same day. Mark changes with `# ADDED 2026-11-06` / `# CHANGED ...` comments. Database copies are the exception and stay in `instance/`.
 - **Credentials live in `.keys` files, never environment variables.** The secret key is in `wvara.keys`.
-- **Functions over classes** (ask before introducing a class).
+- **Functions over classes.** Ask before introducing a class (including a new SQLAlchemy model; a plain table created with SQL is the class-free option).
 - **One step at a time** for multi-step instructions; wait for confirmation.
 - **Writing style:** no em dashes; end replies with one follow-up question.
-- **Local Python:** `/Users/smancuso/salPython3/bin/python app.py` (runs at http://localhost:1977). Debug is OFF, so restart after template changes.
+- **Local Python:** `/Users/smancuso/salPython3/bin/python app.py` (runs at http://localhost:1977, reachable from a phone on the same Wi-Fi at `http://<Mac's IP>:1977`). Debug is OFF, so restart after template changes.
+- **Test on a copy first.** Claude tests changes on a sandbox copy of the database, then Sal checks locally, then `./deploy.sh`, then commit and push.
+- **Run git on the Mac, never from Claude's sandbox** (a sandbox `git status` once left a stale `.git/index.lock`).
 
 ---
 
@@ -43,21 +46,25 @@
 | `models.py` | `Member`, `DuesPayment`, `RoleHistory`, `MeetingAttendance`, `AdminLog`, `PaymentNotice`; dues constants |
 | `wvara.wsgi` | mod_wsgi entry point (finds the venv's `python3.x` folder automatically) |
 | `wvara.keys` | `SECRET_KEY=...` (auto-created if missing; never commit, never deploy over) |
-| `deploy.sh` | One-command deploy from the Mac (see section 6) |
+| `deploy.sh` | One-command deploy from the Mac (section 6) |
+| `load_roster.py` | One-time roster load from `instance/WVARA_DB.csv` (**done**; refuses to run twice). Sal's fixes are in the `FIXES` / `SKIP_CALL_SIGNS` / `DUES_OVERRIDES` tables at the top. |
+| `fix_last_contact.py` | One-time Mac fix for Last Contact after the first load (**done**; not needed on the server) |
+| `issue_temp_passwords.py` | Random temporary passwords (**run on the server Nov 6**). Use `--only CALL1,CALL2` to reissue individuals. A second full run is refused unless `--again`. |
+| `reset_to_core_members.py` | Nov 5 reset to W6SAL + W6HS. **Never run it again**: it deletes everyone else. |
 | `static/css/wvara-theme.css` | WVARA site theme, layered over the original styles |
 | `static/img/wvara-logo.png` | Club logo (copied from wvara.org) |
-| `static/data/zip_centroids.json` | ZIP code coordinates for the map (43 ZIPs) |
+| `static/data/zip_centroids.json` | ZIP code coordinates for the map |
 | `templates/_pay_dues_modal.html` | Pay Dues lightbox, included from `base.html` |
-| `templates/signup.html` | Self sign-up page (`/signup`): ham or not-licensed choice, FCC Look Up, family request |
+| `templates/signup.html` | Self sign-up page (`/signup`) |
 | `templates/member_reports.html` | Member-facing Reports & Directory page |
-| `templates/admin/map.html` | Member Map (shared by the admin and member views) |
-| `instance/wvara_membership.db` | SQLite database (**live copy on the server is the real one**) |
-| `instance/zip_cache.json` | ZIPs looked up at runtime |
-| `instance/license_lookup_tried.json` | Call signs not found by the FCC fill (skipped for 30 days) |
-| `archive/` | **Added Nov 6, 2026.** Every dated code/template/doc backup, in the same folder layout as the live files. Mac only; never deployed. See section 11. |
-| `load_roster.py` | **Added Nov 6, 2026.** One-time roster load from `instance/WVARA_DB.csv`. Dry run by default, `--yes` to load, `--details` to list everyone. Sal's fixes are in the `FIXES` / `SKIP_CALL_SIGNS` / `DUES_OVERRIDES` tables at the top. Refuses to run twice. |
-| `fix_last_contact.py` | **Added Nov 6, 2026.** One-time Mac fix: blanks the Last Contact the first load stamped on imported members who never logged in. Not needed on the server. |
-| `instance/WVARA_DB.csv` | The old club database export (members' personal data). Lives in `instance/`, so it's never deployed and is gitignored. Copy it to the server by hand for the load, then delete it there. |
+| `templates/admin/map.html` | Member Map (admin and member views) |
+| `templates/admin/activity_log.html` | Activity Log report |
+| `templates/admin/_access_levels_modal.html` | "What's this?" lightbox explaining the admin access levels |
+| `instance/wvara_membership.db` | SQLite database (**the server's copy is the real one**) |
+| `instance/WVARA_DB.csv` | Old club database export (personal data). **Mac only**; deleted from the server after the load. |
+| `instance/temp_passwords-*.csv` | The private temporary-password list. **Mac only**; deleted from the server. Every member's password is in it, so never email, commit or upload it. |
+| `instance/zip_cache.json`, `instance/license_lookup_tried.json` | Runtime caches for the map and the FCC fill |
+| `archive/` | Every dated code/template/doc backup, in the live folder layout (section 12). Committed to git; never deployed. |
 
 ---
 
@@ -65,254 +72,192 @@
 
 ### Security and access
 - **CSRF protection** on every POST (hand-rolled: `get_csrf_token`, `csrf_protect`). Fetch calls send `FormData` that includes `csrf_token`.
-- **Forced password change.** New members log in with their call sign as the password; `force_password_change` blocks every page until they set their own (10+ characters, uppercase, number, special character).
-- **Passwords** are hashed with Werkzeug scrypt (one-way, salted). Admins can't see them, only reset them.
-- **Admin lockout guards** (`would_remove_last_admin`): no demoting, deactivating or deleting yourself; the last active admin is protected.
-- **Roles:**
-  - **Members:** own Dashboard, Profile, Change Password, Reports & Directory, Member Map, Pay Dues.
-  - **Admins:** everything. `admin_required` checks the database on every request; the Admin menu uses the live `viewer_is_admin` context value.
-- **Directory opt-out** (`Member.directory_opt_out`): hides email, phone, street address and ZIP from the *member* directory. Admins always see full info.
+- **Passwords** are hashed with Werkzeug scrypt. Admins can't see them, only reset them.
+- **Temporary passwords:** readable, random, e.g. `Carbon-Cobalt-3101` (`generate_readable_temp_password()`: two of 189 words plus four digits). Used by `issue_temp_passwords.py` and by **Add Member**, which shows the password once in the success message. Passwords are never written to the Activity Log. Admin **Reset Password** still uses the older 12-character `generate_temp_password()`.
+- **Forced password change:** anyone on a temporary password (`password_is_temporary`) is blocked from every page until they set their own (10+ characters, uppercase, number, special character).
+- **Three admin access levels** (`members.admin_level`; `is_admin` stays True for any level so older checks keep working):
+
+  | | Records Manager | Club Administrator | System Administrator |
+  |---|---|---|---|
+  | Meant for | Board members, Secretary | President, VP, Treasurer | People who run the tool (W6SAL, W6HS) |
+  | Members, admin notes, Add Member, family links | Yes | Yes | Yes |
+  | Attendance, Roles, Reports, Member Map | Yes | Yes | Yes |
+  | Reset a password | Regular members only | Yes | Yes |
+  | Dues and PayPal notices | No | Yes | Yes |
+  | Activity Log, FCC fill | No | Yes | Yes |
+  | Deactivate / delete members | No | Yes | Yes |
+  | Set access levels | No | Up to Club Administrator | All levels |
+
+  - **Safety rules:** nobody can change, reset the password of, deactivate or delete someone at a higher level; nobody changes their own level; there is always at least one active System Administrator. Every access change is logged ("Access level: X → Y").
+  - **Roles and access are separate.** Holding an office (Roles page) never grants access; levels are set by hand on the member page.
+  - **Code:** `ADMIN_LEVELS`, `ADMIN_LEVEL_LABELS`, `admin_level_of()`, `admin_rank()`, `admin_level_label()`, `current_viewer()`, decorator `admin_level_required('club')` (on `/admin/dues`, the Activity Log, FCC fill), `member_action_block_reason()` (checked on every POST to the admin member page), action `set_access_level`, context processor `inject_admin_levels`. The old `toggle_admin` action is refused.
+  - **Screens:** an **Access level** pull-down with a "What's this?" lightbox in the member page's Quick Actions; level badges on the member page and the Members list; Dues links and the Activity Log card are hidden from Records Managers.
+- **Member roles (non-admin):** own Dashboard, Profile, Change Password, Reports & Directory, Member Map, Pay Dues.
+- **Directory opt-out** (`Member.directory_opt_out`): the *member* directory shows only name and call sign; admin reports always show everything.
+
+### Activity Log (Admin → Reports, Club Administrator and up)
+- `/admin/reports/activity` (`report_activity()`, `filtered_activity()`): date, time (Pacific), admin (with a **Self** badge for members editing their own record), member affected, what happened, what changed. Filters by admin, member and date range; 100 per page; CSV adds the IP address. Read-only, no delete. Downloading the CSV is itself logged.
+- **"Old → new" detail** (`log_snapshot()`, `log_value()`, `describe_changes()`, `MEMBER_LOG_FIELDS`, `DUES_LOG_FIELDS`) for admin member edits, admin notes (trimmed to 200 characters), dues edits, deletes and new payments, role start and end dates, access level changes, and member self-edits on `/profile` ("Updated own profile"). Entries before Nov 6 have no detail.
 
 ### Dues logic (`models.py`)
 - `DUES_BY_TYPE = {'Individual': 15.00, 'Family': 25.00}`; Lifetime pays nothing.
 - `is_lifetime()` treats "Lifetime", "Life Member" and "Life" as lifetime.
-- `get_dues_status()` returns `lifetime` / `paid` / `grace` / `expired`. **This is the single source of truth** used everywhere.
+- `get_dues_status()` returns `lifetime` / `paid` / `grace` / `expired`. **This is the single source of truth** used everywhere. Family members follow their head.
 - **Grace period:** last year's dues count through the end of February (`GRACE_PERIOD_LAST_MONTH = 2`).
-- `is_expiring_soon()` in `app.py`: grace members, or paid members from November 1 on (`DUES_RENEWAL_WARNING_MONTHS = 2`), **unless next year is already paid**.
+- `is_expiring_soon()` in `app.py`: grace members, or paid members from November 1 on, **unless next year is already paid**.
 
 ### Pay Dues (PayPal, manual confirmation)
-- **Member side:**
-  - The lightbox (`_pay_dues_modal.html`) is pre-filled with call sign, name and email. It offers Individual $15 or Family $25, a "Dues are for" year pull-down (only unpaid years among this year and next), and a family members box.
-  - **Continue to PayPal** saves a `PaymentNotice`, then opens a centered PayPal pop-up. PayPal blocks iframes, so a real lightbox iframe is impossible.
+- **Member side:** the lightbox (`_pay_dues_modal.html`) is pre-filled; Individual $15 or Family $25; a "Dues are for" year pull-down (unpaid years among this year and next); a family members box. **Continue to PayPal** saves a `PaymentNotice`, then opens a PayPal pop-up (PayPal can't be framed).
 - **PayPal buttons** (public IDs in `PAYPAL_BUTTONS`): Individual `F54PDUUYZN668`, Family `AVGLTZVHUWR8W`.
-- **Where Pay Dues appears:** dashboard dues card (Expired/Grace, or "Renew for next year" from November 1), Reports page card, Members menu. Hidden for Lifetime members and for anyone with nothing left to pay.
-- **Treasurer side (Dues page):** a "PayPal Payments to Confirm" list.
-  - **Mark Paid** creates a `DuesPayment` for the chosen year and amount (family names go in the notes).
-  - **Dismiss** handles payments that never came through.
-- **Safety:** `/dues/pay/start` refuses a year that's already paid.
-- **The Dues form** defaults Family members to $25.
+- **Treasurer side (Dues page):** "PayPal Payments to Confirm" with **Mark Paid** and **Dismiss**. `/dues/pay/start` refuses a year that's already paid.
+- **Manage Dues Payments:** starts in call sign A to Z order; every column header sorts (History rows move with their member). The Record Payment form defaults to **Check** and Family members to $25.
 
 ### Members and admin pages
-- **Members list:**
-  - sortable columns and paging (25/50/100/All, client-side JS)
-  - Member Since column
-  - clickable `mailto:` / `tel:` links
-  - four dues badges
-  - "Account" (Enabled/Disabled) column
-  - filters: all, active, current, inactive, expiring, expired, lifetime, disabled, everyone
-- **Admin dashboard:** five clickable tiles (Total, Active, Expired, Expiring Soon, Lifetime), plus an Expiring Soon contact list.
-- **Add Member:** a **Look Up** button pulls FCC data (name, address, license class) via callook.info, with HamDB.org as backup (`lookup_call_sign`).
-- **Attendance:** keyed on date + event type + event name, so multiple events on one day work.
-- **Roles:** duration column (fixed), "Starts Mon YYYY" for future start dates, long titles wrap.
-- **License class dropdowns** show "Extra" but store "Amateur Extra"; Advanced and Novice were added.
+- **Members list:** sortable columns, paging (25/50/100/All), Member Since, `mailto:` / `tel:` links, dues badges, Account (Enabled/Disabled), access level badge, filters (all, active, current, inactive, expiring, expired, lifetime, disabled, everyone).
+- **Admin dashboard:** five clickable tiles (Total, Active, Expired, Expiring Soon, Lifetime), Expiring Soon and Expired lists (Last Contact shows **Never** when blank), Family Links to Confirm.
+- **Admin member page:** edit form (emergency contact is optional here, since imported members have none), **Admin Notes** card (admins only; holds the old-database details for imported members), Family Membership card, Dues History, Quick Actions (access level, deactivate, reset password, delete, as the viewer's level allows).
+- **Add Member:** **Look Up** pulls FCC data (callook.info, HamDB.org as backup); creates a random temporary password.
+- **Attendance:** keyed on date + event type + event name. Works fine on an iPhone (Sal, Nov 6). **Saving the form replaces the whole list for that event** (see section 8, kiosk).
+- **Roles:** duration column, "Starts Mon YYYY" for future start dates.
+- **License class dropdowns** show "Extra" but store "Amateur Extra"; Advanced and Novice included.
+
+### Club Information card (member Dashboard) and login page
+- Meetings: **Second Wednesday of each month, 7:00 PM** (`CLUB_MEETING_TEXT`, `CLUB_MEETING_TIME`, also used on the login page).
+- President and Treasurer come from the Roles page (`current_officer()`: exact title, current, already started; "Vice President" never matches). Shown as name + call sign, with the email link always going to the role address in `OFFICER_EMAILS`: **president@wvara.org**, **treasurer@wvara.org**. Eric's January 2027 start shows up on its own.
 
 ### Member Map
-- **Admin:** `/admin/map`. **Members:** `/map` (no admin links, no "couldn't be mapped" list).
-- **ZIP-level bubbles only** (no street pins), within **75 miles of the repeater site at Good Samaritan Hospital** (2425 Samaritan Dr, San Jose; `MAP_CENTER = (37.251167, -121.945463)`).
-- Members outside the radius are listed as "Remote / Virtual."
-- **New ZIPs:** looked up once via api.zippopotam.us (only the ZIP is sent) and cached.
-- **License class ribbon** under the stats (`build_license_mix`), counts only.
-- **Admin "Fill blanks from FCC" button** (`admin_fill_license_classes`): 20 lookups per click, fills blanks only.
+- **Admin:** `/admin/map`. **Members:** `/map`. ZIP-level bubbles within **75 miles of the repeater site at Good Samaritan Hospital** (`MAP_CENTER = (37.251167, -121.945463)`); others are "Remote / Virtual." New ZIPs are looked up once via api.zippopotam.us and cached. License class ribbon. "Fill blanks from FCC" (Club Administrator and up): 20 lookups per click, blanks only.
 
 ### Reports
-- **Member directory** (`/reports/directory`, PDF landscape or CSV): call sign, name, email, phone, street address, city. Respects opt-out.
-- **Admin reports** are unchanged: directory, dues status (now with a Dues Status column), attendance, mailing labels, email list.
+- **Member directory** (`/reports/directory`, PDF or CSV); respects opt-out.
+- **Admin reports:** directory, dues status, attendance, mailing labels, email list, Activity Log.
 
-### Self sign-up and family memberships (added Nov 5, 2026; rules in section 10)
-- **Sign-up (`/signup`, linked from the login page):** pick "I'm a licensed ham" (call sign, checked with `lookup_call_sign` through the public `/signup/lookup_callsign`) or "I'm not licensed (yet)" (username, `USERNAME_SHAPE`, 3 to 15 letters and numbers, rejected if `CALL_SIGN_SHAPE` matches). CAPTCHA, the password rules, instant access, and an `AdminLog` entry tagged `SIGNUP` (with the FCC result).
-- **Non-hams:** `is_licensed = False`.
-  - Labels read "Call Sign / Username"; login reads "Call Sign or Username."
-  - "Not licensed" tag in the Members list and on the Member Status card.
-  - Skipped by FCC Fill; their own "Not licensed" chip on the map ribbon; no QRZ photo or license dropdown on their profile.
-  - Admin edit page has a **Licensed ham** checkbox; Add Member has **Not licensed**.
-- **Family helpers:**
-  - `models.py`: `get_family_head()` (one level, loop-safe), `get_family_members()`, `is_family_head()`.
-  - `app.py`: `link_family_member()` (guards plus the switch to Family) and `family_head_choices()`.
-- **Admin Dashboard:** a **Family Links to Confirm** card (route `/admin/family_links`, Confirm / Decline, head pull-down for typos).
-- **Member edit page:** a Family Membership card with Add family member, **Make Family Head** and **Move to Individual**. Deleting a head moves their family to Individual. The Members list shows "Family of X" / "Family head (n)."
-- **Member dashboard:**
-  - Family members see "Covered by X" / "Family Dues Expired" and never see Pay Dues.
-  - Heads see "Your family: ...".
-  - Anyone waiting on a family link sees "Family Link Pending" and no Pay Dues.
-- **Pacific time:** the `pacific` Jinja filter (`to_pacific`) shows stored UTC times in PST/PDT. It falls back to a hand-written US DST rule because the server's Python 3.8 has no `zoneinfo`. It's used for sign-up date, Last Contact and PayPal notice dates. The database still stores UTC.
+### Self sign-up and family memberships (Nov 5, 2026; rules in section 11)
+- **Sign-up (`/signup`):** licensed hams use their call sign (FCC Look Up); non-hams pick a username (3 to 15 letters and numbers, nothing shaped like a call sign). CAPTCHA, password rules, instant access, `AdminLog` entry tagged `SIGNUP`.
+- **Non-hams:** `is_licensed = False`; "Call Sign / Username" labels; "Not licensed" tag; skipped by FCC Fill; Admin edit page has a **Licensed ham** checkbox.
+- **Families:** `family_head_id` (one level); `get_family_head()`, `get_family_members()`, `is_family_head()`, `link_family_member()`, `family_head_choices()`. Family members share the head's dues status and never see Pay Dues.
+- **Pacific time:** the `pacific` Jinja filter (`to_pacific`) shows stored UTC times in PST/PDT (hand-written DST fallback because the server's Python 3.8 has no `zoneinfo`). The database stores UTC.
 
 ### Look and feel
-- Matches wvara.org: navy header and footer (`#0b1220`), Inter font, red primary buttons (`#d71920`), orange accent (`#f36f21`), peach eyebrow labels (`#ffbf8e`), rounded cards. The work area stays light for readability.
+- Matches wvara.org: navy header and footer (`#0b1220`), Inter font, red primary buttons (`#d71920`), orange accent (`#f36f21`), peach eyebrow labels (`#ffbf8e`), rounded cards.
 
 ---
 
 ## 5. Database changes (all automatic)
 
-`ensure_schema()` runs on startup:
-- `db.create_all()` creates new tables (`payment_notices`).
-- It adds `members.directory_opt_out` to older databases with `ALTER TABLE` if missing.
-- **Added Nov 5, 2026:** `members.is_licensed` (default 1), `members.family_head_id` (plus an index) and `members.family_link_request`, added the same way.
-- **Added Nov 6, 2026:** `members.admin_notes` (TEXT), added the same way. It shows in the **Admin Notes** card on the admin member page (action `update_admin_notes`, logged as "Updated admin notes"). Never shown on member pages or in reports.
-- Login-name columns are declared `String(15)` (were 10). SQLite doesn't enforce the length, so no migration is needed.
+`ensure_schema()` runs on startup and adds anything missing:
+- `db.create_all()` for new tables (`payment_notices`).
+- `members.directory_opt_out`.
+- Nov 5: `members.is_licensed` (default 1), `members.family_head_id` (+ index), `members.family_link_request`.
+- Nov 6: `members.admin_notes` (TEXT) and `members.admin_level` (VARCHAR(10)). The first time `admin_level` is added, every existing admin becomes `system` (that's how W6SAL and W6HS became System Administrators on both the Mac and the server).
+- Login-name columns are `String(15)`; SQLite doesn't enforce lengths, so no migration was needed.
 
 **No migration step is needed.** Flask-Migrate is wired up, but there's no `migrations/` folder.
 
-**Sample attendance data:** 348 made-up check-ins across 17 events in 2026, tagged `notes='SAMPLE DATA'` and `recorded_by='SAMPLE'`, so they're easy to delete later.
+*Mac only:* the removed Check-In experiment created an `event_guests` table and a test event in the Mac database. Harmless; delete the test event on the Attendance page.
 
 ---
 
-## 6. Server and deployment
+## 6. Server, deployment and GitHub
 
-- **Server:** Ubuntu 20.04, Apache 2.4.41, mod_wsgi on **Python 3.8**. The venv **must** be built with `python3.8` (the default `python3` is 3.12 and breaks mod_wsgi).
-- **Apache:** the block lives in `/etc/apache2/sites-enabled/salmancuso.com-le-ssl.conf`. It runs its own `WSGIDaemonProcess wvara` with `python-home` set to the venv and `WSGIScriptAlias /tools/wvara .../wvara.wsgi`. The original conf is backed up at `/root/salmancuso.com-le-ssl.conf-20261104`.
-- **Permissions:**
-  - app files: `root:www-data`, `u=rwX,g=rX,o=`
-  - `instance/`: `www-data` with mode 770, so SQLite can write its journal file
-  - `wvara.keys`: `www-data`, mode 600
-- **Deploy:** run `./deploy.sh` from the project folder on the Mac. It:
-  1. backs up the live database to `/root/wvara-backups/` with a timestamp
-  2. rsyncs the code, **excluding** `venv`, `instance/`, `wvara.keys`, `__pycache__`, `*-2026*` backups, `archive/` (added Nov 6, 2026), `.git`, `.DS_Store`
+- **Server:** Ubuntu 20.04, Apache 2.4.41, mod_wsgi on **Python 3.8**. The venv **must** be built with `python3.8` (the default `python3` is 3.12 and breaks mod_wsgi). **The server clock runs on UTC.**
+- **Apache:** block in `/etc/apache2/sites-enabled/salmancuso.com-le-ssl.conf` with its own `WSGIDaemonProcess wvara` and `WSGIScriptAlias /tools/wvara .../wvara.wsgi`. Original conf backed up at `/root/salmancuso.com-le-ssl.conf-20261104`.
+- **Permissions:** app files `root:www-data`, `u=rwX,g=rX,o=`; `instance/` owned by `www-data`, mode 770; `wvara.keys` `www-data`, mode 600.
+- **Deploy:** `./deploy.sh` from the project folder on the Mac:
+  1. backs up the live database to `/root/wvara-backups/`
+  2. rsyncs the code, **excluding** `venv`, `instance/`, `wvara.keys`, `__pycache__`, `*-2026*`, `archive/`, `.git`, `.DS_Store`, `deploy.sh`
   3. resets permissions
-  4. checks the Apache config and reloads Apache (reloading only restarts the WVARA process)
-- **Logs:** `/var/log/apache2/error.log` (app lines are tagged `WVARA:`).
+  4. checks the Apache config and reloads Apache
+- **Running a script on the server:** `cd /var/www/html/salmancuso/tools/wvara` then `sudo -u www-data venv/bin/python <script>.py` (dry run), then add `--yes`. Running as www-data keeps the database owner right.
+- **Copying a file down:** from a Mac Terminal (not inside ssh): `scp 'root@salmancuso.com:/var/www/html/salmancuso/tools/wvara/instance/<file>' /Users/smancuso/Documents/Personal/Sal/programming/wvara_membership/instance/`
+- **Logs:** `/var/log/apache2/error.log` (app lines tagged `WVARA:`).
+- **GitHub:** commit and push after each deployed change: `git add -A`, `git status` (check: **no `.db`, `.csv` or `.keys` files**), `git commit -m "..."`, `git push`. `.gitignore` blocks `*.db`, `*.csv`, `*.keys`, `instance/`, `venv/`, `__pycache__/`. HANDOFF.md and `archive/` are committed (private repo). Last confirmed push: Nov 6, after the access levels.
+- **SSH key setup: on hold** (Sal, Nov 6). The tool will eventually move to the club's server, deployed from GitHub. If picked up again: `ssh-keygen -t ed25519`, `ssh-copy-id root@salmancuso.com`, test with `ssh root@salmancuso.com`. The "post-quantum" SSH warning is harmless.
 
 ---
 
 ## 7. Gotchas learned the hard way
 
 - `grep -r` skips symlinks in `/etc/apache2/sites-enabled`; use `grep -R`.
-- rsync run as root copies the Mac's file owners. That's why `deploy.sh` resets permissions afterward.
-- Writing to SQLite from Claude's sandbox through the shared folder caused a `disk I/O error` and a leftover `-journal` file. **Do database edits through the app, or on a copy, then swap it in.** Never leave a hot journal file next to the database.
-- Claude's sandbox can't fetch web pages directly. Use the built-in browser pane for research (wvara.org, the Census geocoder, zippopotam).
+- rsync run as root copies the Mac's file owners, so `deploy.sh` resets permissions afterward.
+- Writing to SQLite from Claude's sandbox through the shared folder caused a `disk I/O error`. **Do database edits through the app or a script Sal runs, or on a copy.** Never leave a hot journal file next to the database.
+- Claude's sandbox can't fetch web pages directly; use the built-in browser pane for research.
 - PayPal checkout pages can't be framed, so use a pop-up window.
 - The server's database is the source of truth. Never deploy `instance/` from the Mac.
+- **The server runs on UTC.** Use Pacific time for anything date-of-meeting related (a 7 PM meeting is "tomorrow" in UTC).
+- **SQLAlchemy column defaults fire even when you pass `None`** (the first load stamped "now" as everyone's Last Contact). Blank it with an UPDATE after the insert.
+- **Jinja prints `None` as the word "None"** in form fields. Always write `value="{{ x or '' }}"`, or saving the form stores "None".
+- **Saving the Attendance page replaces the whole list** for that event.
+- **Run git on the Mac.** A sandbox `git status` left a stale `.git/index.lock`.
 
 ---
 
 ## 8. Open items and next steps
 
-1. **PayPal IPN (automatic "paid" updates).** *Nov 5: Sal texted Eric (W6HS) asking for access to the club PayPal account, since Scott KK6IK may be too busy with his move. Sal is confident he can set it up once he has access.* Still needed: check the club PayPal account's **Account Settings → Website payments → Instant payment notifications**: is IPN on, and what URL? The Notification URL is account-wide, so don't overwrite an existing one. The plan: an `/paypal/ipn` listener that verifies with PayPal (`cmd=_notify-validate`), matches pending `PaymentNotice` records by email and amount, and auto-confirms confident matches. Unclear matches stay in the treasurer's list.
-2. **Mobile/tablet polish.** Phone-friendly Members list and Attendance page (no sideways scrolling).
-3. **One-time roster load (next up).** *Nov 6, 2026: `load_roster.py` is built and tested on a sandbox copy (138 new members + W6SAL/W6HS dues, 129 dues rows, 15 families). **Loaded on the Mac Nov 6, 2026 at 10:39** (140 members, 129 dues rows; pre-load backup `instance/wvara_membership-before-load-20261106-103912.db`). **Found while checking:** the Mac load stamped the load time as Last Contact on all 138 imported members (the model default fires even when `None` is passed). Fixed in `load_roster.py` (blanks it right after insert, so the server load is clean) and with the one-time `fix_last_contact.py` for the Mac (dry run / `--yes`; only imported members still on their temporary password). The Admin Dashboard now shows "Never" for a blank Last Contact. **Also Nov 6:** the Manage Dues Payments table starts in call sign A to Z order and every column header sorts (History rows move with their member). `fix_last_contact.py --yes` run on the Mac and the local check passed (Nov 6, 2026). **Deployed and loaded on the server Nov 6, 2026 at 10:56:** 140 members, 126 dues rows (3 fewer than the Mac because W6SAL 2026/2027 and W6HS 2026 were most likely already entered on the live site, so the script skipped those years). Server pre-load backup: `instance/wvara_membership-before-load-20261106-105630.db`. Live site checked, and `instance/WVARA_DB.csv` was **deleted from the server** on Nov 6, 2026 (the Mac copy stays in `instance/`, never deployed or committed). Original plan: `./deploy.sh`, copy `instance/WVARA_DB.csv` to the server's `instance/` (owner www-data), run `load_roster.py` as www-data (dry run, then `--yes`), check the live site, then delete the CSV from the server. See item 12 for the rules it applies.* Sal may get the member list with current status on Nov 6, 2026. The fake data and `SAMPLE DATA` attendance are already gone (Nov 5 reset); only W6SAL and W6HS remain.
-   - **Plan:** look at the list's real columns first, then build a one-time load script.
-     - Dry run by default and `--yes` to load, the same pattern as `reset_to_core_members.py`.
-     - Run it on the Mac first, then on the server as `www-data`.
-   - **The script needs to handle:**
-     - hams vs. non-hams (`is_licensed`, usernames 3 to 15 letters and numbers)
-     - membership type (Individual / Family / Lifetime variants)
-     - family groups (`family_head_id`)
-     - current dues status → `DuesPayment` rows for paid years
-     - skipping W6SAL and W6HS if they're in the list
-     - temporary password = call sign/username (`password_is_temporary = True`), same as Add Member
-   - The existing `import_members.py` (CSV, with columns like `call_sign`, `fcc_class`, `zip`, `emergency_*`) predates `is_licensed`, families and dues, so treat it as a reference, not the tool.
-   - Open: whether to email members their login info after the load.
-4. **SSH key setup: ON HOLD (Sal, Nov 6, 2026).** The tool will eventually move to the club's server, so GitHub matters more than keys for Sal's personal server. Original note: so `deploy.sh` stops asking for the password three times. The plan: create a key on the Mac (`ssh-keygen -t ed25519`), copy it with `ssh-copy-id root@salmancuso.com`, then test with `ssh root@salmancuso.com`. Go one step at a time. The "post-quantum" SSH warning on every connection is harmless: the server runs Ubuntu 20.04's older OpenSSH.
-5. **Optional clean-up:** `.git`, screenshots and `.DS_Store` were copied to the server in the first deploy (harmless, since they aren't web-accessible).
-6. **Future features Sal mentioned:** FCC license *expiration* alerts, and member activity interests (Field Day, POTA, CW, ARES/CERT and so on).
-7. ~~**Admin access for Eric (W6HS)**~~: done; W6HS is an active admin.
-8. **Self sign-up go-live (Nov 5, 2026):**
-   - Deployed to the server (Nov 5). Still to do: one live test sign-up, deleted afterward.
-   - Sal texted Eric (W6HS) about the sign-up feature, including non-hams. Still to do: tell Eric about the Lifetime-family decision.
-   - ~~TESTSARAH test account~~: removed by the Nov 5 reset; W6SAL is back to Individual.
-   - W6SAL and W6HS both show Expired after the reset. Enter real 2026 dues on the Dues page.
-9. **Roster load and non-hams:** see item 3. For one-off adds, use Add Member with **Not licensed** ticked.
-10. **`reset_to_core_members.py`** has done its job. It's kept in the project and on the server for reference. Don't run it again after the real roster is loaded, because it deletes everyone except W6SAL and W6HS.
-11. **Equipment inventory (idea stage, Nov 6, 2026; no code yet).** The club owns radios, antennas, surplus and a trailer with a mast and beam. There's no complete inventory and no clear rule on which gear is club-use only, loanable or for sale.
-    - **Proposed Phase 1:** admin-only inventory page. Each item gets an asset tag (e.g. `WVARA-0001`), category, make/model/serial, condition, location and custodian (a member, since gear often lives in someone's garage), photo, how it was acquired, and a **disposition**: Club use only / Loanable / For sale / Retired / **Undecided** (the default until the board decides). Kits link to a parent item (the trailer owns its mast and beam).
-    - **Proposed Phase 2:** members see only Loanable and For sale items and can request a loan or purchase. Requests land in a "to confirm" list on the Admin Dashboard, the same pattern as PayPal notices and Family Links. Loans track out date, due date and return condition.
-    - **Open questions for the board / Eric (W6HS):** who approves loans and sales; must dues be current to borrow (likely yes, via `get_dues_status`); can non-hams borrow transmitting gear; loan length and late rules; sale pricing and members-first window; does disposing of club assets need a board vote under the bylaws; trailer towing, liability and insurance; is there an Equipment Manager role.
-12. **Member CSV review (Nov 6, 2026):** Sal uploaded `WVARA_DB.csv` (141 rows, 35 columns; old club database export). Reviewed and copied to `instance/WVARA_DB.csv`. Load script `load_roster.py` built Nov 6 (section 3). Later answers from Sal: N6MRO = $15; W6SAL = 2026 and 2027 both paid; prepaid members get one dues row per covered year (the real payment on its own year, $0 "Prepaid per old club database" rows for the rest; Oct to Dec payments count for the next year).
-    - **Statuses:** Regular 86, Family 19, Regular-FamilyMaster 15, Life 3, Inactive 17, SK 1. DuesPaidThru: 2026 106, 2027 4, 2028 1, 2099 (= Life) 3, 2025 11, 2024 16.
-    - **Families are clean:** 20 members link to 15 heads through `MasterFamilyCallsign`; every head exists in the file. Seven family rows have "See <head>" as the street address, so the loader should copy the head's address.
-    - **Fix before loading:** Richard Southern has no call sign; NT6S has State/Zip swapped ("9512" / "CA"); W6SAL's PaymentDate reads 11/5/27; bad ZIPs on AI6NT (`95008-15831`) and K6EBN (`95014-`); 9 rows have no email, but `Member.email` is required; 29 rows have no DateJoined (also required); 3 PaymentDates are `0000-00-00`.
-    - **Status questions for Sal:** 10 "Regular" members only paid through 2025; NT6F is SK (silent key) but paid for 2026; KG6KRI is a family head with no family; KG6ENF is Life but paid $15 in 2017; N6MRO is Regular for 2026 with $0 paid.
-    - **Columns with no home in `Member`:** Handle, Spouse, ARRLMemb, RptrMemb, Badge, HetNotice, EmailListsInit, MembEListYear, AutoCode, Comments, CheckNumber, OtherPayt/RptrDuesPayt (donations and repeater dues). `Password` is empty (good). Need Sal's call: add columns, keep a legacy notes field, or drop.
-    - **Opt-out mismatch:** the CSV hides address/phone/email separately (AJ6LG hides address and phone, W6PGC hides email only); the app has one all-or-nothing `directory_opt_out`.
-    - **Auto-cleanable by the loader:** trim spaces, one phone format, ZIP+4 dashes, `Ca` → `CA`, license letters (E/A/G/T/N) → full names, PayPal/check/cash spellings, one `DuesPayment` per paid year (multi-year payers: K0XI, K6QFO, W6ESL, WB6JMR, KF6EMB, W9KKN).
-    - **Sal's decisions (Nov 6, 2026); the loader applies these, the CSV stays as uploaded:**
-      - Richard Southern → non-ham, username `rsouthern` (`is_licensed = False`).
-      - NT6S → State `CA`, ZIP `95125`.
-      - AI6NT → ZIP `95008`; K6EBN → ZIP `95014`.
-      - Emails: K6LOH `K6LOH@SBCGlobal.net`; KK6DZS `jim@deloach.net` (same as husband WU0I); KC6BIG, KM6AAY, KD6KRS, W6LKK → `<call>@winlink.org`; KK6HFV and KN6QZJ → `jonathanzdasiuk@gmail.com` (shared). Shared emails are fine: login is by call sign, nothing looks members up by email. Email-list exports should de-duplicate.
-      - **KC6QBF: do not load** (license expired 2002). Lifetime count drops to 2 (AB6VS, KG6ENF).
-      - Missing DateJoined (29) and `0000-00-00` PaymentDates → `2000-01-01`. Add a legacy note so admins know it's a placeholder.
-      - "Regular" members paid only through 2025 → load as-is; the app shows them Expired.
-      - **NT6F: Silent Key**, passed April 14, 2026 → `is_active = False`, login disabled, note "Silent Key, April 14, 2026."
-      - KG6KRI stays a Family head with no family members. KG6ENF stays Life.
-      - N6MRO → `DuesPayment` for 2026, dated 2026-01-15 (amount still open; the CSV says $0).
-      - W6SAL: the 11/5/27 date is a typo for **11/5/26**, the day Sal paid 2027 dues → 2026 and 2027 both paid (confirm). W6SAL and W6HS already exist, so the loader adds only their dues rows.
-      - **Directory opt-out:** any CSV hide flag (address, phone or email) → `directory_opt_out = True` (AJ6LG, W6PGC). Member reports then show name and call sign only. Admin reports always show everything. This is how the app already works; no change needed.
-      - **Legacy notes:** add an admin-only notes field on each member (needs a model change; ask before building). It holds Handle, Spouse, ARRL/repeater membership, Badge, Comments, the old codes, donation history and placeholder-date flags.
-13. **Activity Log: BUILT and DEPLOYED Nov 6, 2026** (checked live; the "None" fix went out with it). Admin → Reports → **Activity Log** (`/admin/reports/activity`, `report_activity()` + `filtered_activity()`, template `admin/activity_log.html`). Columns: date, time (Pacific), admin (with a "Self" badge when someone edited their own record), member affected, what happened, what changed. Filters: admin, member, date range; 100 per page; CSV adds the IP address. Read-only, no delete. Downloading the CSV is itself logged. New helpers `log_snapshot()`, `log_value()`, `describe_changes()` with `MEMBER_LOG_FIELDS` / `DUES_LOG_FIELDS` give "old → new" detail for admin member edits, admin notes (trimmed to 200 characters), dues edits/deletes/new payments, role start/end dates, and **member self-edits on /profile** (logged as "Updated own profile"). Sal's call: once access levels exist, only System and Club Admins see the log. **Found while testing:** blank emergency contact fields render as the text "None" on the admin member page and the profile page, and saving writes "None" into the database (KK6IK has it now). **Fixed Nov 6, 2026** (`or ''` in `admin/member_detail.html` and `profile.html`). Also made emergency contact **optional on the admin page** (it was required, and none of the 138 imported members have one, so admins couldn't save their records without inventing one). It stays required on the member's own Profile page. KK6IK's literal "None" values need clearing by hand (Mac, and the server if it happened there). Original idea notes:
-    - **Admin activity report (idea, Nov 6, 2026).** `AdminLog` already records 25 kinds of admin actions (who, what, which member, when, IP), but there's no page to view it, and "Updated member information" doesn't say which fields changed.
-    - **Proposed:** an Admin → Activity Log page. Filters for admin, member, action and date range; times shown in Pacific; CSV export. Plus field-level detail on member edits ("Phone: 408-555-1111 → 408-555-2222"), with passwords never logged.
-    - Open: how long to keep the log (forever is fine at this size); whether admins can delete entries (recommend no).
-14. **GitHub (Nov 6, 2026).** The project is already a clone of **private** repo `github.com/salmancuso/wvara_membership` (branch `main`). Last push was Jan 30, 2026; **the Nov 4 to 6 work was committed and pushed on Nov 6, 2026** (after the roster load). Going forward: commit and push after each change that's deployed. Sal's calls: HANDOFF.md and `archive/` **are** committed (private repo). `.gitignore` already keeps out `*.db`, `*.csv`, `*.keys`, `instance/`, `venv/`, `__pycache__/`. **Run git on the Mac, not from Claude's sandbox:** a `git status` from the sandbox left a stale `.git/index.lock` on Nov 6 (removed right away).
-15. **Club Information card (member Dashboard), decided and built Nov 6, 2026; deployed and checked live the same day** (roles re-entered on the live site). Code: `CLUB_MEETING_TEXT`, `CLUB_MEETING_TIME`, `OFFICER_EMAILS`, `current_officer()` and the `inject_club_info` context processor in `app.py`; used by `templates/dashboard.html` and `templates/login.html`. Tested: a future-dated President (W6HS, Jan 2027) doesn't show yet, "Vice President" never matches, and titles match regardless of case/spaces.
-    - Meetings: **Second Wednesday of each month, 7:00 PM** (was "First Wednesday"; the login page says the same and needs the same fix, ideally from one setting).
-    - President and Treasurer come from the Roles page: the member holding a current, already-started "President" / "Treasurer" role, shown as name + call sign. The email link is always the role address: **president@wvara.org** and **treasurer@wvara.org** (not the member's own email). If nobody holds the role, show just the role address.
-    - The Nov 5 reset cleared all roles, so Sal needs to re-enter Scott KK6IK (President, current), Eric W6HS (President, starting January 2027) and the Treasurer on both the Mac and the server.
+1. **Send the login emails (next).** The private list is in the Mac's `instance/temp_passwords-*.csv` (138 rows: call sign, name, email, temporary password, active, login link). A draft email is in the Nov 6 chat: login page, call sign, temporary password, "the site will ask you to pick your own password." Watch for: **KK6HFV and KN6QZJ share one inbox** (separate emails, or both passwords clearly labeled); **RSOUTHERN** gets "username" instead of "call sign." Inactive members can't log in, so skip their emails unless they're being reactivated. Lost email later → `issue_temp_passwords.py --only CALLSIGN` on the server.
+2. **Commit and push** the last round (Check-In removal, Check default, temporary passwords, Add Member fix). Sal hasn't confirmed this push yet.
+3. **Give the Secretary a Records Manager login** on the live site (their member page → Access level).
+4. **Self check-in kiosk (idea; no code yet).** A laptop or iPad by the door. A Records Manager or higher sets up the event and taps "Start check-in"; members type their call sign or username and tap "I'm here."
+   - **Fix first:** make the Attendance page *add* to an event's list instead of replacing it, or it will wipe kiosk check-ins.
+   - Lock the device to the kiosk screen (ideally drop the admin login on that device; exit with a PIN or password).
+   - Show nothing private: no member list, just "Welcome, Sal. You're checked in." A discreet renewal note for expired dues, plus an expired-dues list for the Treasurer afterward.
+   - Handle "already checked in," "not found / guest?" (guest count), former members (admins get a heads-up to reactivate), and auto-reset after a few seconds.
+   - Reusable from the removed Check-In experiment (`archive/app-20261106-v7-with-checkin.py`): `pacific_today()`, the expired-dues note wording, the plain `event_guests` guest-count table.
+5. **PayPal IPN (automatic "paid" updates).** Waiting on Eric (W6HS) for access to the club PayPal account. Check **Account Settings → Website payments → Instant payment notifications** (is IPN on, and what URL? It's account-wide, so don't overwrite one). Plan: a `/paypal/ipn` listener that verifies with PayPal (`cmd=_notify-validate`), matches pending `PaymentNotice` records by email and amount, and auto-confirms confident matches; unclear ones stay in the Treasurer's list.
+6. **Equipment inventory (idea; no code yet).** The club owns radios, antennas, surplus and a trailer with a mast and beam; there's no complete inventory and no clear rule on what's club-use only, loanable or for sale.
+   - **Phase 1:** admin-only inventory: asset tag (e.g. `WVARA-0001`), category, make/model/serial, condition, location and custodian (a member), photo, how acquired, and a **disposition** (Club use only / Loanable / For sale / Retired / **Undecided**, the default). Kits link to a parent item (the trailer owns its mast and beam).
+   - **Phase 2:** members see Loanable and For sale items and request a loan or purchase; requests land in a "to confirm" list on the Admin Dashboard. Loans track out date, due date and return condition.
+   - **Board questions:** who approves loans and sales; dues current to borrow; non-hams and transmitting gear; loan length and late rules; pricing and a members-first window; whether selling club assets needs a board vote; trailer towing, liability and insurance; an Equipment Manager role.
+7. **Mobile polish:** Attendance is fine on an iPhone (Sal, Nov 6). The Members list could still use a phone layout.
+8. **Future features Sal mentioned:** FCC license *expiration* alerts; member activity interests (Field Day, POTA, CW, ARES/CERT and so on).
+9. **Small to-dos:**
+   - Sal fixes his own and Eric's records by hand (Sal's record still has test details: phone `(408) 555-1234`, address `123 Radio Signal Lane`; real values are in the CSV: W6SAL joined 3/17/24; W6HS joined 1/24/25, license class E).
+   - Check KK6IK on the live site for literal "None" emergency contact values (fixed on the Mac).
+   - One live test sign-up, deleted afterward.
+   - Tell Eric about the Lifetime-family decision (section 11).
+   - Optional: `.git`, screenshots and `.DS_Store` were copied to the server in the first deploy (harmless, not web-accessible).
 
-16. **Admin access levels (idea, Nov 6, 2026; no code yet).** Today there's one `is_admin` flag. Sal wants three levels:
-    - **Level 1** (Sal's "god mode"): everything, including dues and access.
-    - **Level 2** (President, VP, Treasurer): same as Level 1, but can't change or remove a Level 1 account.
-    - **Level 3** (board members, Secretary): member records, roles, attendance; no dues.
-    - Names, the Level 3 limits, a second Level 1 person, and whether club roles grant levels automatically are still open (see the Nov 6 chat). Pairs with the phone-friendly Attendance page (item 2): the Secretary takes attendance on a phone, iPad or laptop at meetings instead of on paper.
-
-16. **Tiered admin access: BUILT and DEPLOYED Nov 6, 2026** (live site checked: W6SAL shows System Administrator).
-    - **Data:** new `members.admin_level` (`records` / `club` / `system`, NULL = none), added by `ensure_schema()`, which also sets every current admin (`is_admin = 1`) to `system` the first time it runs (so W6SAL and W6HS on the Mac and the server). `is_admin` stays True for any level, so old `admin_required` checks still work. An admin with no level recorded counts as Records Manager (least access).
-    - **Code (`app.py`):** `ADMIN_LEVELS`, `ADMIN_LEVEL_LABELS`, `admin_level_of()`, `admin_rank()`, `admin_level_label()`, `current_viewer()`, decorator `admin_level_required('club')` (on `/admin/dues`, the Activity Log, FCC fill), `member_action_block_reason()` (checked on every POST to the admin member page), new action `set_access_level`, context processor `inject_admin_levels`.
-    - **Rules:** Records Manager = members, notes, add member, family links, attendance, roles, reports, map, and resetting *regular* members' passwords. Club Administrator adds dues/PayPal, Activity Log, deactivate/delete, FCC fill, set access up to Club Admin. System Administrator = everything. Nobody acts on someone above them or changes their own level; never zero active System Admins; old `toggle_admin` action is refused. Every access change is logged ("Access level: X → Y").
-    - **Screens:** member page Quick Actions has an **Access level** pull-down + "What's this?" lightbox (`templates/admin/_access_levels_modal.html`); level badges on the member page and Members list; Dues hidden from Records Managers in the Admin menu, admin dashboard and Reports (Activity Log card).
-    - Tested on a sandbox copy with a fake Club Admin (KK6IK) and Records Manager (N6NWS).
-    - Original notes: Today there's one `is_admin` flag. Sal wants three levels: (1) full control, Sal; (2) President / VP / Treasurer, same as level 1 but can't remove level 1 access; (3) Board members and the Secretary: member records, roles and attendance, but not dues. Names and the permission grid are still being decided (see the Nov 6 chat). Key catches to settle before building: more than one level-1 person (continuity); level 3 must not be able to promote itself (careful if Roles ever auto-grant access); who handles PayPal notices, family links, password resets, deletes and exports. The Activity Log (item 13) matters more once several people have admin access.
-    - **Sal's decisions (Nov 6, 2026):** names **System Administrator / Club Administrator / Records Manager** (proposed; Sal didn't object). **W6SAL and W6HS are both System Administrators.** Only System Admins can change System Admins (rule, not a hard-coded call sign). **Roles and admin access stay separate:** access is set by hand on the member page, never from the Roles page. Add a **"?" link** next to the access setting that opens a lightbox explaining each level.
-    - **Activity Log (item 13) confirmed:** a basic report under Admin Reports: admin call sign, date, time (Pacific), member affected, and what changed (old → new). Purpose: make sure nothing nefarious happens and everything is logged.
-    - **Dues flag at check-in (item 17):** never block anyone from attending or being checked in, but show the Secretary when a member is past the grace period so they can say "please pay your dues."
-17. **Check-In page: REMOVED Nov 6, 2026 (never deployed).** Sal tested it, then decided the existing Attendance page already works well on an iPhone, so a separate page was overkill. `app.py`, `templates/base.html` and `templates/admin/attendance.html` were restored from `archive/app-20261106-v6.py`, `archive/templates/base-20261106-v2.html` and `archive/templates/admin/attendance-20261106.html` (the only changes since those backups were Check-In). The removed version is kept for reference: `archive/app-20261106-v7-with-checkin.py`, `archive/templates/admin/checkin-20261106-removed.html`, `checkin_summary-20261106-removed.html`, and the `-with-checkin` copies of base/attendance. Pieces worth reusing for the kiosk (item 18): `pacific_today()`, the expired-dues note, the `event_guests` guest-count table. The Mac database may still hold an empty or test `event_guests` table and test attendance from Sal's phone test (harmless; delete the test event on the Attendance page).
-18. **Self check-in kiosk (idea, Nov 6, 2026; no code yet).** A laptop or iPad by the door: a Records Manager or higher sets up the event and taps "Start check-in"; members walk up, type their call sign (or username) and tap "I'm here." Notes so far: lock the device to the kiosk screen (ideally drop the admin login on that device so a walk-away laptop isn't an open admin session; exit with a PIN or password); show nothing private on screen (no member list, just "Welcome, Sal. You're checked in"); a gentle, discreet renewal message for expired dues; "already checked in" and "not found / guest?" handling; auto-reset after a few seconds. **Must fix first:** saving on the Attendance page *replaces* the whole list for that event, which would wipe kiosk check-ins.
-19. **Temporary passwords: DEPLOYED and RUN on the server Nov 6, 2026** (138 members: 120 active, 18 inactive; W6SAL and W6HS untouched). The private list was copied to the Mac's `instance/` folder (gitignored, never deployed). CSV **deleted from the server** Nov 6, 2026. Still to do: send the individual emails (draft is in the Nov 6 chat; KK6HFV and KN6QZJ share an inbox; RSOUTHERN gets "username" instead of "call sign"). Do not run the script again for everyone (it refuses without `--again`); use `--only` for individuals.
-    - **`issue_temp_passwords.py`** (run on the SERVER as www-data; dry run by default, `--yes` to issue). Gives every member still on a temporary password, except W6SAL and W6HS, a random readable one (`generate_readable_temp_password()` in `app.py`, e.g. `Carbon-Cobalt-3101`: two of 189 words plus four digits). Inactive members included. Members who already set their own password are never touched. Backs up the database first; writes the private list to `instance/temp_passwords-YYYYMMDD-HHMMSS.csv` (mode 600: call sign, name, email, temp password, active, login link); one transaction. A second full run is **refused** (it would cancel emailed passwords) unless `--again`; `--only K6ABC,N6XYZ` reissues individuals. The Activity Log records the run, never the passwords. Tested on a sandbox copy: 138 issued in about 10 seconds; old call-sign passwords stop working.
-    - **Add Member** now creates a random temporary password too, shows it once in the success message, and no longer writes the password into the Activity Log (it used to log "Initial password: CALLSIGN"). The Add Member page text was updated to match.
-    - After running on the server: `scp` the CSV to the Mac, then **delete it from the server**. Then send the individual emails.
-    - Original request: **Temporary passwords for everyone (requested Nov 6, 2026).** Replace the call-sign starting password for every member except W6SAL and W6HS with a random temporary one, flagged temporary so the existing forced-change screen kicks in. Give Sal a private list (call sign, name, email, temp password) for individual emails. The live site has had call-sign passwords since the Nov 6 load, so do this before members are told about the site.
-20. **Dues page: manual entries now default to Check** (Nov 6, 2026; `templates/admin/dues.html`). Local; deploy with the next push.
-21. **(old item 17 notes)** Check-In page as built:
-    - **Flow:** start screen (event name required every time, per Sal; date defaults to today in **Pacific** time via `pacific_today()`, since the server runs on UTC; type Meeting/Event/Other; recent events from the last 14 days can be re-opened) → check-in screen (pinned search, big tap rows, sections Checked in / Regulars / Everyone else, Grace and Dues expired badges, family members follow their head, former members appear only when searched and get tagged) → **Done** → summary (counts, "Attended with expired dues" list with a mailto to treasurer@wvara.org).
-    - **Saving:** every tap posts to `/admin/checkin/toggle` (fetch + CSRF token) and saves at once; the page re-syncs every 20 seconds (`/admin/checkin/state`) so two devices can check in together. Records get `notes='Check-In'`.
-    - **Guests:** + / − buttons; new plain table `event_guests` (created by `ensure_schema()` with raw SQL, no new model class). Guest counts also show on the Attendance page's Recent Events.
-    - **Logging (Sal's call):** one "Took attendance (Check-In)" summary per tap of Done (who, event, counts, call signs); un-checking someone logs "Removed attendee from event" right away.
-    - **Attendance page:** new banner pointing to Check-In, and a warning that saving there *replaces* the whole list for that event (that was already true).
-    - Original idea notes: **Phone-friendly attendance (idea, Nov 6, 2026).** Today the Secretary takes attendance on paper and it's unreliable. Goal: check people in at the meeting on an iPhone, iPad or laptop. Ideas: search box, big tap rows, sticky "N checked in" bar, regulars first, save each tap as you go, maybe a guest count, later QR self check-in.
+---
 
 ## 9. Open questions
 
-- **W6SAL / W6HS records (Nov 6, 2026):** the load adds only their dues. Sal's own record still has test details (phone `(408) 555-1234`, address `123 Radio Signal Lane`, join date 2024-01-01), and both have no admin notes. The CSV has the real values (W6SAL joined 3/17/24; W6HS joined 1/24/25, license class E). **Decided Nov 6, 2026: Sal will fix both records by hand** on the admin member page; the load stays dues-only for them.
+- **Late-year joiners:** if someone joins in November and pays $15, do they owe again in January? (Not decided. The Pay Dues year pull-down lets the member choose; the Treasurer can adjust.)
+- **Does PayPal pass a member identifier back?** Not confirmed for these hosted buttons; IPN matching may need email and amount.
+- **Unknown old-database codes** (kept in each member's Admin Notes): what AutoCode, HetNotice (Requested/Published), EmailListsInit (A, M, C, WL) and MembEListYear mean. Eric or Scott might know.
 
-- **Late-year joiners:** if someone joins in November and pays $15, do they owe again in January? (Not decided. The Pay Dues year pull-down lets the member choose, and the treasurer can adjust.)
-- **Does PayPal pass a member identifier back?** Not confirmed for these hosted buttons; IPN matching may need to rely on email and amount.
+---
 
-## 10. Decisions: self sign-up and family memberships (Nov 5, 2026)
+## 10. Roster load record (Nov 6, 2026)
 
-*Sal's calls, made while building the sign-up feature. All of it is built and tested locally (Sal tested TESTSARAH end to end on Nov 5). Next: `./deploy.sh`, then a live test sign-up.*
+*Source: `WVARA_DB.csv`, the old club database export (141 rows, 35 columns). Loaded with `load_roster.py` on the Mac at 10:39 and on the server at 10:56.*
 
-- **Self sign-up at `/signup` gives instant access.** No admin approval. Low bot risk for a small club site; the CAPTCHA stays.
-- **Licensed hams must use their call sign as their username.** The sign-up page says so plainly; Look Up checks the FCC.
-- **Non-hams pick a username:** 3 to 15 letters and numbers, no spaces or special characters, and nothing shaped like a call sign. Stored in `members.call_sign` with `is_licensed = False`. If they get licensed later, an admin changes the username to their call sign.
-- **Login column widened from 10 to 15 characters** (code and model only; SQLite doesn't enforce the length, so no migration).
-- **Family memberships:** everyone gets their own account. `members.family_head_id` points to the member who pays the $25. Family members share the head's dues status. One level only.
+- **Mapping:** Regular → Individual; Regular-FamilyMaster → Family head; Family → linked to its head (`MasterFamilyCallsign`); Life → Lifetime; Inactive and SK → login disabled. License letters E/A/G/T/N → full names. Any CSV hide flag → full directory opt-out (AJ6LG, W6PGC). Family members whose address said "See <head>" got the head's address.
+- **Dues records:** one per covered year. The real payment goes on its own year (Oct to Dec payments count for the next year); other prepaid years get a $0 "Prepaid per old club database" row. Family members and Lifetime members get none (they follow the head / are always current).
+- **Legacy details** (Handle, Spouse, ARRL and repeater membership, Badge, old codes, Comments, last payment line, placeholder-date flags) went into each member's **Admin Notes**.
+- **Sal's fixes:** Richard Southern → non-ham username `RSOUTHERN`; NT6S → CA 95125; AI6NT → 95008; K6EBN → 95014; missing emails filled (K6LOH, KK6DZS uses husband WU0I's, KC6BIG / KM6AAY / KD6KRS / W6LKK use `<call>@winlink.org`, KK6HFV and KN6QZJ share `jonathanzdasiuk@gmail.com`); **KC6QBF not loaded** (license expired 2002); missing join dates and `0000-00-00` payment dates → 2000-01-01 (flagged in Admin Notes); **NT6F, Silent Key**, passed April 14, 2026 (inactive); KG6KRI stays a family head with no family; KG6ENF stays Lifetime; N6MRO 2026 dues = $15 on 2026-01-15; W6SAL paid 2026 and 2027 (the CSV's 11/5/27 was a typo for 11/5/26). The 10 "Regular" members paid only through 2025 show as Expired.
+- **Results:** server 140 members and 126 dues rows (the Mac got 129; the server skipped 3 years W6SAL and W6HS already had). W6SAL and W6HS kept their records; only their dues were added, and Sal will fix the rest by hand.
+
+---
+
+## 11. Decisions: self sign-up and family memberships (Nov 5, 2026)
+
+- **Self sign-up at `/signup` gives instant access.** No admin approval; the CAPTCHA stays.
+- **Licensed hams must use their call sign as their username.**
+- **Non-hams pick a username:** 3 to 15 letters and numbers, nothing shaped like a call sign. Stored in `members.call_sign` with `is_licensed = False`. If they get licensed, an admin changes it to their call sign.
+- **Family memberships:** everyone gets their own account; `family_head_id` points to the member who pays the $25; family members share the head's dues status; one level only.
   - A sign-up can request a family link; an admin confirms or declines it on the Admin Dashboard.
-  - Confirming under an Individual head switches the head to Family ($25); the treasurer settles any difference by hand.
-  - If the head leaves or stops paying, the family expires with them. An admin can then **Make Family Head** (someone else takes over; past dues stay with the old head) or **Move to Individual**.
-  - Deleting a head moves their family members to Individual.
-  - No limit on family size.
-- **Lifetime families:** if the family head is a Lifetime member, the whole family is treated as Lifetime and pays nothing. (Sal's executive decision, Nov 5, 2026; Eric W6HS had not replied yet.) The Lifetime dashboard tile still counts only the head, since only the head holds the lifetime membership.
+  - Confirming under an Individual head switches the head to Family ($25); the Treasurer settles any difference by hand.
+  - If the head leaves or stops paying, the family expires with them; an admin can **Make Family Head** or **Move to Individual**.
+  - Deleting a head moves their family members to Individual. No limit on family size.
+- **Lifetime families:** if the head is Lifetime, the whole family is treated as Lifetime (Sal's call; Eric not yet told). The Lifetime tile counts only the head.
 
-## 11. Backup archive (added Nov 6, 2026)
+---
 
-*Sal's calls: code backups only, mirrored folder layout, and future backups go straight into the archive.*
+## 12. Backup archive (Nov 6, 2026)
 
-- **What moved:** 77 dated backups (`app-*`, `models-*`, `HANDOFF-*`, `start-*`, `.gitignore-*`, and every dated template) moved from the project root and `templates/` into `archive/`, keeping their folder layout:
-  - `archive/` (root-level files such as `app-20261105-v9.py`)
-  - `archive/templates/`
-  - `archive/templates/admin/`
-- **What stayed:** live files only in the root, `templates/` and `templates/admin/`. The dated database copies stay in `instance/` on purpose, so member data lives in one place (and `deploy.sh` already skips `instance/`).
-- **Going forward:** save each new backup into the matching `archive/` path (see section 2). No more `-2026*` files next to live code.
-- **Deploy:** `deploy.sh` now has `--exclude 'archive/'` (ADDED 2026-11-06; backup at `archive/deploy-20261106.sh`). The old `*-2026*` exclude stays as a safety net.
-- **Git:** none of the backups were tracked by git, so the move doesn't show up as deletions. `archive/` is not in `.gitignore` yet; add it if you don't want the backups committed.
-- **Restoring an old version:** copy it from `archive/` back over the live file (make a fresh backup of the live file first).
+- **`archive/`** holds every dated code, template and doc backup in the live folder layout (`archive/`, `archive/templates/`, `archive/templates/admin/`). Live folders hold live files only.
+- **Database copies stay in `instance/`**, so member data lives in one place.
+- **Deploy** skips `archive/` (`--exclude 'archive/'`, added Nov 6); the old `*-2026*` exclude stays as a safety net.
+- **Git:** `archive/` is committed (Sal's call; private repo).
+- **Removed Check-In experiment** (built and removed Nov 6, never deployed): `archive/app-20261106-v7-with-checkin.py`, `archive/templates/admin/checkin-20261106-removed.html`, `archive/templates/admin/checkin_summary-20261106-removed.html`, and the `-with-checkin` copies of `base.html` and `attendance.html`. Sal decided the regular Attendance page already works on an iPhone.
+- **Restoring an old version:** back up the live file first, then copy the old one from `archive/` over it.
