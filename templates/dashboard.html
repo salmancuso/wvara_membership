@@ -87,7 +87,7 @@
                             {% elif dues_state == 'grace' %}
                                 <div class="alert alert-warning">
                                     <i class="bi bi-hourglass-split"></i> <strong>Family Renewal Due</strong><br>
-                                    <small>{{ family_head.call_sign }}'s {{ current_year }} family dues are due. You're covered through the end of February.</small>
+                                    <small>{{ family_head.call_sign }}'s {{ current_year }} family dues are due. You're covered through January 31.</small>{# CHANGED 2026-11-09: was "the end of February" #}
                                 </div>
                             {% else %}
                                 <div class="alert alert-warning">
@@ -110,7 +110,7 @@
                             <div class="alert alert-warning">
                                 <i class="bi bi-hourglass-split"></i> <strong>Renewal Due</strong><br>
                                 {# CHANGED 2026-11-05: amount follows membership type #}
-                                <small>Your {{ current_year }} dues{% if pay_dues %} (${{ '%.0f'|format(pay_dues.amounts[pay_dues.choice]) }}){% endif %} are due. You're covered through the end of February.</small>
+                                <small>Your {{ current_year }} dues{% if pay_dues %} (${{ '%.0f'|format(pay_dues.amounts[pay_dues.choice]) }}){% endif %} are due. You're covered through January 31.</small>{# CHANGED 2026-11-09: was "the end of February" #}
                             </div>
                         {% elif dues_status %}
                             <div class="alert alert-success">

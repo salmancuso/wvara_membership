@@ -9,11 +9,35 @@ db = SQLAlchemy()
 
 # ADDED 2026-11-04: club dues rules
 DUES_AMOUNT = 15.00            # $15 per calendar year
-GRACE_PERIOD_LAST_MONTH = 2    # last year's dues still count through the end of February
+GRACE_PERIOD_LAST_MONTH = 1    # CHANGED 2026-11-09: was 2. Last year's dues count through Jan 31; pay no later than Feb 1
 DUES_RENEWAL_WARNING_MONTHS = 2  # "Expiring Soon" starts 2 months before Dec 31 (Nov 1)
 
 # ADDED 2026-11-05: annual dues by membership type (Lifetime pays nothing)
 DUES_BY_TYPE = {'Individual': 15.00, 'Family': 25.00}
+
+
+# ADDED 2026-11-09: today's date in California. The server clock runs on UTC, so date.today()
+# flips to the next day at 4 PM / 5 PM Pacific. Same DST rule as to_pacific() in app.py
+# (kept here because models.py can't import app.py; the server's Python 3.8 has no zoneinfo).
+def pacific_today() -> date:
+    """Today's date in US Pacific time (PST/PDT)"""
+    utc_now = datetime.utcnow()
+    try:
+        from zoneinfo import ZoneInfo  # Python 3.9+
+        from datetime import timezone
+        return utc_now.replace(tzinfo=timezone.utc).astimezone(ZoneInfo('America/Los_Angeles')).date()
+    except Exception:
+        pass
+    # US rule: daylight time from the 2nd Sunday in March 2:00 AM to the 1st Sunday in November 2:00 AM (local)
+    year = utc_now.year
+    march_1 = datetime(year, 3, 1)
+    dst_start_local = march_1 + timedelta(days=(6 - march_1.weekday()) % 7 + 7, hours=2)
+    nov_1 = datetime(year, 11, 1)
+    dst_end_local = nov_1 + timedelta(days=(6 - nov_1.weekday()) % 7, hours=2)
+    dst_start_utc = dst_start_local + timedelta(hours=8)   # 2:00 AM PST
+    dst_end_utc = dst_end_local + timedelta(hours=7)       # 2:00 AM PDT
+    offset = 7 if dst_start_utc <= utc_now < dst_end_utc else 8
+    return (utc_now - timedelta(hours=offset)).date()
 
 
 def dues_amount_for(membership_type) -> float:
@@ -118,7 +142,7 @@ class Member(db.Model):
         Return one of: 'lifetime', 'paid', 'grace', 'expired'
         - lifetime: Lifetime members are always current
         - paid:     dues recorded for the current calendar year
-        - grace:    January/February, and last year's dues are paid
+        - grace:    January, and last year's dues are paid (CHANGED 2026-11-09: was January/February)
         - expired:  everything else
         """
         if self.is_lifetime():
@@ -129,7 +153,7 @@ class Member(db.Model):
         if head is not None:
             return head.get_dues_status()
 
-        today = date.today()
+        today = pacific_today()  # CHANGED 2026-11-09: was date.today() (UTC on the server)
         paid_years = {p.year for p in DuesPayment.query.filter_by(member_id=self.id).all()}
 
         if today.year in paid_years:

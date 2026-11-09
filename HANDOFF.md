@@ -171,7 +171,7 @@
 - **Running a script on the server:** `cd /var/www/html/salmancuso/tools/wvara` then `sudo -u www-data venv/bin/python <script>.py` (dry run), then add `--yes`. Running as www-data keeps the database owner right.
 - **Copying a file down:** from a Mac Terminal (not inside ssh): `scp 'root@salmancuso.com:/var/www/html/salmancuso/tools/wvara/instance/<file>' /Users/smancuso/Documents/Personal/Sal/programming/wvara_membership/instance/`
 - **Logs:** `/var/log/apache2/error.log` (app lines tagged `WVARA:`).
-- **GitHub:** commit and push after each deployed change: `git add -A`, `git status` (check: **no `.db`, `.csv` or `.keys` files**), `git commit -m "..."`, `git push`. `.gitignore` blocks `*.db`, `*.csv`, `*.keys`, `instance/`, `venv/`, `__pycache__/`. HANDOFF.md and `archive/` are committed (private repo). Last confirmed push: Nov 6, after the access levels.
+- **GitHub:** commit and push after each deployed change: `git add -A`, `git status` (check: **no `.db`, `.csv` or `.keys` files**), `git commit -m "..."`, `git push`. `.gitignore` blocks `*.db`, `*.csv`, `*.keys`, `instance/`, `venv/`, `__pycache__/`. HANDOFF.md and `archive/` are committed (private repo). Last confirmed push: Nov 6, end of day (everything live is on GitHub).
 - **SSH key setup: on hold** (Sal, Nov 6). The tool will eventually move to the club's server, deployed from GitHub. If picked up again: `ssh-keygen -t ed25519`, `ssh-copy-id root@salmancuso.com`, test with `ssh root@salmancuso.com`. The "post-quantum" SSH warning is harmless.
 
 ---
@@ -195,7 +195,7 @@
 ## 8. Open items and next steps
 
 1. **Send the login emails (next).** The private list is in the Mac's `instance/temp_passwords-*.csv` (138 rows: call sign, name, email, temporary password, active, login link). A draft email is in the Nov 6 chat: login page, call sign, temporary password, "the site will ask you to pick your own password." Watch for: **KK6HFV and KN6QZJ share one inbox** (separate emails, or both passwords clearly labeled); **RSOUTHERN** gets "username" instead of "call sign." Inactive members can't log in, so skip their emails unless they're being reactivated. Lost email later → `issue_temp_passwords.py --only CALLSIGN` on the server.
-2. **Commit and push** the last round (Check-In removal, Check default, temporary passwords, Add Member fix). Sal hasn't confirmed this push yet.
+2. ~~**Commit and push** the last round~~: done Nov 6, 2026 (Check-In removal, Check default, temporary passwords, Add Member fix, HANDOFF rewrite). GitHub matches the live site.
 3. **Give the Secretary a Records Manager login** on the live site (their member page → Access level).
 4. **Self check-in kiosk (idea; no code yet).** A laptop or iPad by the door. A Records Manager or higher sets up the event and taps "Start check-in"; members type their call sign or username and tap "I'm here."
    - **Fix first:** make the Attendance page *add* to an event's list instead of replacing it, or it will wipe kiosk check-ins.
@@ -261,3 +261,81 @@
 - **Git:** `archive/` is committed (Sal's call; private repo).
 - **Removed Check-In experiment** (built and removed Nov 6, never deployed): `archive/app-20261106-v7-with-checkin.py`, `archive/templates/admin/checkin-20261106-removed.html`, `archive/templates/admin/checkin_summary-20261106-removed.html`, and the `-with-checkin` copies of `base.html` and `attendance.html`. Sal decided the regular Attendance page already works on an iPhone.
 - **Restoring an old version:** back up the live file first, then copy the old one from `archive/` over it.
+
+---
+
+## 13. Moving the tool to wvara.org/members/ (planning, Nov 7, 2026; ADDED 2026-11-07)
+
+*No code written yet. Backup of this file before the edit: `archive/HANDOFF-20261107.md`.*
+
+- **Goal (board liked it):** host the tool at `https://wvara.org/members/`, separate from the PHP site, with the wvara.org header and footer around it.
+- **WVARA PHP repo:** `github.com/WestValleyARA/website`, cloned to `/Users/smancuso/Documents/Personal/Sal/programming/WVARA-PHP/website`. Maintainer: Eric W6HS.
+- **Hosting:** interserver.net. Sal says cPanel with "Setup Python App"; the repo's `docs/SUPPORTED-RUNTIME.md` shows a DirectAdmin-style panel (`:2222/evo`), **LiteSpeed 6.3.7** (not Apache), PHP 8.2, account `wvaraorg`. Python app selector runs a WSGI app from `passenger_wsgi.py`.
+- **Findings from the PHP repo:**
+  1. `header.php` is dynamic (nav from `config.php`, active-page class, Groups.io events ticker with cache), so a shared static header file won't work. Plan: Python fetches the rendered header/footer from a small PHP page and caches it.
+  2. Every asset and nav link in `header.php`/`config.php` is **relative** (`assets/css/main.css`, `events`, `./`), so they break under `/members/`. Needs root-relative paths (`/assets/...`, `/events`) in the PHP; small change for Eric.
+  3. `members.php` already exists (Groups.io buttons) and the nav's **Members** link points to it. A `/members/` app would take over that URL; its content should move into the tool's landing page (board/Eric decision).
+  4. **Their deploy uses `rsync --delete`** on the whole public root (only `private/`, `.wvara-environment`, `cache/*` are preserved, `tools/release/interim-wvara-org-common.sh`). A `members/` folder in `public_html` would be wiped on the next PHP deploy unless `--exclude='/members/'` is added (3 rsync calls) and the CI checks allow it.
+  5. `join.php` / `process-membership.php` handle Join/Renew and are "temporarily unavailable" in the interim production overlay; overlap with our `/signup` and Pay Dues needs a decision.
+- **Our side:** Flask uses `url_for` everywhere, so a new mount path should mostly just work. SQLite is fine on shared hosting (keep `instance/` and `wvara.keys` outside `public_html`). Watch for Bootstrap 5.3 vs `main.css` style clashes once the PHP header is wrapped around our pages. Scheduled jobs would need cron (no long-running process).
+- **Next step:** Sal checks the Python versions offered in the hosting panel's Python app setup.
+
+---
+
+## 14. Decision: rebuild wvara.org in Python/Flask (Nov 7, 2026; ADDED 2026-11-07)
+
+*Backup of this file before the edit: `archive/HANDOFF-20261107-v2.md`. Section 13 is superseded by this section.*
+
+- **Email trail:** Sal emailed Eric options (Nov 7, 5:47 PM). Eric replied (7:14 PM) favoring **converting the whole site to Python**: "the entire site is like six pages, a bunch of photos, and a stylesheet"; the design is his creative part and it's done; "I'm not married to PHP"; Groups.io security still needs work. Sal agrees.
+- **Sal's proposed shape (being evaluated, no code yet):**
+  1. The membership Flask app becomes the main wvara.org site (public pages + member area, one base template, so the header/footer sync problem goes away).
+  2. A separate sync script (cron, not part of Flask) checks a GitHub repo every ~5 minutes for Markdown files with front matter that drive the public pages: home, Repeaters, New Hams, Membership Information, Mission, Donation Information (plus Events/About).
+  3. Other club members get repo access to submit content changes.
+  4. The Groups.io ticker (events, announcements) is rebuilt in Python.
+- **Claude's recommended tweaks (Nov 7):** separate content repo from code repo; sync script pulls into a staging folder, validates front matter, then swaps (last good copy stays live on errors); sanitize Markdown (no raw HTML/scripts); nav built from front matter; Groups.io fetched by a background job into a JSON cache, never during a page load; Groups.io API key and ICS URL in a `.keys` file (the ICS URL with its tokens is currently committed in `config.php`; the API key lives in server-only `private/groupsio-config.php`); reuse Eric's `main.css`, images and `main.js` as is to keep his design; Join/Donate fold into `/signup` and Pay Dues; host on a club-owned DigitalOcean droplet ($6 to $12/mo).
+- **Dependencies:** DNS/domain likely controlled by Scott Nacey (KK6IK, moving east); get registrar/DNS logins into a club account before cutover.
+- **Next step:** Sal drafts a reply to Eric with the plan.
+
+---
+
+## 15. Site rebuild design decisions (Nov 9, 2026; ADDED 2026-11-09)
+
+*Planning only, no code written. Backup of this file before the edit: `archive/HANDOFF-20261109.md`. Builds on section 14.*
+
+### PHP review (Nov 9)
+- The PHP site is 8 content pages (`index`, `events`, `members`, `repeaters`, `new-hams`, `join`, `mission`, `about`, plus `donate`), mostly hand-written HTML. Page bodies for About/Events/Mission are in `content/*.html`.
+- Only five dynamic pieces: the **Upcoming Events ticker** (`includes/groupsio-events.php`, Groups.io ICS feed, 30-min cache, max 5 items; markup in `header.php`, rotation + detail overlay in `assets/js/main.js`), the **Latest from WVARA Chat** box (`includes/groupsio-latest-post.php`, Groups.io API key in server-only `private/groupsio-config.php`), **Join/Renew** (`join.php`, `process-membership.php` → replaced by `/signup` + Pay Dues), **Donate** (`donate.php`: PayPal JS SDK + a relay to Scott's Google Sheet; needs a talk with Scott/Eric), and reCAPTCHA.
+- Plan: eliminate PHP entirely; the whole site lives in Flask. Port the ticker to Python (cron job → JSON cache), reuse Eric's ticker HTML/JS/CSS as is.
+
+### Two repos
+- **`wvara_membership`** (Sal only): Flask, templates, CSS/JS/images, sync script, ticker.
+- **`wvara-content`** (private, WestValleyARA org): `pages/*.md`, `documents/*.md` (one per document), `files/` (the documents), `images/`. Editors for now: **Sal and Eric only**, pushing straight to `main`. Purpose is an easy handoff to a future Webmaster/Secretary/President, not editing by every board member. **Repo access = board-level access** (board documents live there, and git history keeps old versions).
+- Sync script (cron, ~5 min): fetch, pull into staging, validate front matter / layouts / referenced files / file types / sizes, then swap; last good copy stays live on errors and Sal gets an email. Raw HTML and scripts stripped from Markdown (login shares the domain). Read-only deploy key.
+
+### Officers page
+- **Comes from the content repo, not the Roles page** (Sal): front matter with role, name, call, email, **photo and bio**. Photo/bio are not worth adding to the tool.
+- The member Dashboard's Club Information card still reads President/Treasurer from Roles, so an officer change means updating both places.
+
+### Members area and Documents
+- Nav "Members" becomes **"Members Login"**. After login: Membership Tool, Groups.io how-to (members-only Markdown page), Documents.
+- **One Documents page** lists everything (grouped by `category`), each document backed by its own `.md` file. Files live outside `static/` and are served by a login-checked route that **re-checks the tier on download**.
+- Example front matter: `title`, `description`, `file`, `category`, `view`.
+- **Today the board shares these documents only by email**; this is the first shared home for them.
+
+| `view:` | Who sees it | Examples (Sal) |
+|---|---|---|
+| `members` | Any **active** member (account enabled, can log in), dues paid or not | Bylaws (encouraged, so people can see what membership requires) |
+| `current` | Active **and** dues current | Repeater DTMF / autopatch codes, net control scripts |
+| `board` | Active, dues current, **and** holds any **current** role on the Roles page (any title; started and not ended) | Repeater room access, the Good Samaritan Hospital entry procedure |
+| *(System Administrator)* | **Sees everything**, regardless of dues or roles ("God mode") | Sal currently holds no board role |
+
+- **Dues before the board seat:** a board member whose dues lapse drops to `members` only.
+- **Active ≠ current.** Active = account enabled (can log in). Current = paid for this calendar year, Lifetime, in the grace period, or a family member whose head is current. Keep the two terms separate in code and on screen.
+- Missing or misspelled `view:` → treated as `board` (fail closed) and flagged to Sal by the sync check.
+- Members who see fewer documents get a short note ("Some club documents are available once your dues are current") with Pay Dues; no document names shown.
+- Access levels and roles stay separate. Records Manager and Club Administrator levels grant **no** extra document access; only System Administrator does (the override above).
+
+### Grace period change (decided Nov 9, not yet coded)
+- **New rule:** dues for the year must be paid **no later than February 1**. Grace is January only. Unpaid after that → not current.
+- Code today: `GRACE_PERIOD_LAST_MONTH = 2` in `models.py` (through the end of February). Change to `1`; update the `get_dues_status()` docstring ("January/February") and the HANDOFF line in section 4. This one setting drives dues badges, Expiring Soon, dashboard tiles, the members filters and document access.
+- `get_dues_status()` uses `date.today()`, which is **UTC on the server**, so grace would end at 4 PM Pacific on Jan 31. Use a Pacific date (`pacific_today()` from the archived check-in code) when making this change.
