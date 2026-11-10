@@ -2,7 +2,7 @@
 
 *Started November 5, 2026 after a two-day build session with Claude. **Rewritten end of day November 6, 2026** after the roster load, admin notes, Activity Log, access levels, Club Information card and temporary passwords all went live. Earlier versions are in `archive/HANDOFF-*.md`.*
 
-*New session? Read this file, then ask Sal what's next. **Up next (Sal, Nov 9): get the tool and the site rebuild dialed in first** (sections 14 and 15; design decisions settled Nov 9; no rebuild code yet; next decision is hosting). **Member login emails are ON HOLD** until the tool is ready (section 8, item 1). Content repo created: `https://github.com/salmancuso/wvara-content.git` (not cloned to the Mac yet).* *(CHANGED 2026-11-09: "push the latest commit" done; rebuild pointer added. Backup: `archive/HANDOFF-20261109-v2.md`.)*
+*New session? Read this file (start with **section 16, end of day Nov 9**), then ask Sal what's next. **Work happens on the `site-rebuild` branch** (`git switch site-rebuild` on the Mac); this HANDOFF.md is newest on that branch. **Up next:** pick the first rebuild piece (section 16: Claude suggests 1. seed the content repo, 2. Flask site shell + ticker, 3. Documents page). **Member login emails are ON HOLD** (section 8, item 1).* *(CHANGED 2026-11-09 end of day. Backup: `archive/HANDOFF-20261109-v10.md`.)*
 
 ---
 
@@ -49,6 +49,7 @@
 | `deploy.sh` | One-command deploy from the Mac (section 6). **Refuses unless on `main`** (ADDED Nov 9) |
 | `deploy-site.sh` | Deploys the **test site** to `/tools/wvara-site`; **refuses unless on `site-rebuild`** (ADDED Nov 9, section 15) |
 | `wvara-site.wsgi` | mod_wsgi entry point for the test site (`APP_DIR` = `wvara-site`, logs tagged `WVARA-SITE:`). Never point it at `/tools/wvara` (ADDED Nov 9) |
+| `SERVER_SETUP.md` | Step-by-step server setup checklist (test site Nov 9; reuse for the future WVARA server). Add every new setup step here (ADDED Nov 9) |
 | `load_roster.py` | One-time roster load from `instance/WVARA_DB.csv` (**done**; refuses to run twice). Sal's fixes are in the `FIXES` / `SKIP_CALL_SIGNS` / `DUES_OVERRIDES` tables at the top. |
 | `fix_last_contact.py` | One-time Mac fix for Last Contact after the first load (**done**; not needed on the server) |
 | `issue_temp_passwords.py` | Random temporary passwords (**run on the server Nov 6**). Use `--only CALL1,CALL2` to reissue individuals. A second full run is refused unless `--again`. |
@@ -173,7 +174,7 @@
 - **Running a script on the server:** `cd /var/www/html/salmancuso/tools/wvara` then `sudo -u www-data venv/bin/python <script>.py` (dry run), then add `--yes`. Running as www-data keeps the database owner right.
 - **Copying a file down:** from a Mac Terminal (not inside ssh): `scp 'root@salmancuso.com:/var/www/html/salmancuso/tools/wvara/instance/<file>' /Users/smancuso/Documents/Personal/Sal/programming/wvara_membership/instance/`
 - **Logs:** `/var/log/apache2/error.log` (app lines tagged `WVARA:`).
-- **GitHub:** commit and push after each deployed change: `git add -A`, `git status` (check: **no `.db`, `.csv` or `.keys` files**), `git commit -m "..."`, `git push`. `.gitignore` blocks `*.db`, `*.csv`, `*.keys`, `instance/`, `venv/`, `__pycache__/`. HANDOFF.md and `archive/` are committed (private repo). Last confirmed push: Nov 6, end of day (everything live is on GitHub). *(Nov 9: grace period change deployed; commit/push in progress with this HANDOFF update.)*
+- **GitHub:** commit and push after each deployed change: `git add -A`, `git status` (check: **no `.db`, `.csv` or `.keys` files**), `git commit -m "..."`, `git push`. `.gitignore` blocks `*.db`, `*.csv`, `*.keys`, `instance/`, `venv/`, `__pycache__/`. HANDOFF.md and `archive/` are committed (private repo). Last confirmed push: Nov 6, end of day (everything live is on GitHub). *(CHANGED 2026-11-09: last confirmed pushes Nov 9, end of day: `main` at `366ed1c` (grace period + deploy guards; matches the live tool), `site-rebuild` ahead of it with the cookie change, SERVER_SETUP.md and today's HANDOFF updates. See section 16.)*
 - **SSH key setup: on hold** (Sal, Nov 6). The tool will eventually move to the club's server, deployed from GitHub. If picked up again: `ssh-keygen -t ed25519`, `ssh-copy-id root@salmancuso.com`, test with `ssh root@salmancuso.com`. The "post-quantum" SSH warning is harmless.
 
 ---
@@ -361,3 +362,42 @@
 - *(Backup of this file before this edit: `archive/HANDOFF-20261109-v8.md`.)*
 - Options that were considered: (1) build the rebuild on 3.8 under mod_wsgi like the live tool; (2) switch Apache's mod_wsgi to 3.12, which forces the live tool onto a 3.12 venv at the same time; (3) run the rebuild on **3.12 under Gunicorn** (systemd service) with Apache reverse-proxying to it. The live tool stays on 3.8 untouched, and this matches how a fresh server would be set up.
 - **Rules for the rebuild:** run it **beside** the live tool (own folder, own copy of the database, own URL), never on top of `/tools/wvara`; keep code working on both 3.8 and 3.12; write down every server setup step (Apache, venv, systemd/Gunicorn, cron for the sync script, read-only deploy key for `wvara-content`) so the new server is a checklist.
+
+---
+
+## 16. End of day, November 9, 2026 (ADDED 2026-11-09)
+
+*Read this first next session. Details are in section 15. Backup of this file before this section: `archive/HANDOFF-20261109-v10.md`.*
+
+### Where things stand
+- **Live tool** (`https://salmancuso.com/tools/wvara`, branch `main`, commit `366ed1c`): unchanged for members except the **grace period** (now ends Jan 31; pay by Feb 1; dues check uses Pacific date). Deployed and pushed.
+- **Test site** (`https://salmancuso.com/tools/wvara-site`, branch `site-rebuild`): **up and working**, an exact copy of the live tool plus its own login cookie. Own folder, Python 3.8.10 venv (same packages as live), own `wvara.keys`, and a **snapshot of live member data** (Nov 9). Sal's login works; logging into the test site does **not** log him out of the live tool (confirmed). Setup steps: `SERVER_SETUP.md`.
+- **Content repo** `https://github.com/salmancuso/wvara-content.git`: created by Sal, empty, **not cloned to the Mac yet**.
+- **No rebuild code yet** (no public pages, Markdown reader, ticker or Documents page).
+
+### What got done today (in order)
+1. Read HANDOFF + the PHP repo (8 pages, 5 dynamic pieces; section 15).
+2. Settled the design: two repos; officers page from the content repo (photo + bio), not Roles; Documents tiers `members` / `current` / `board` + System Administrator sees everything; board = any **current** role, but only with dues current; missing/misspelled `view:` → `board`.
+3. **Grace period change** coded, sandbox-tested, deployed, pushed (section 15).
+4. **Hosting:** Interserver dropped for now; build on salmancuso.com, move to a new server later. Confirmed Apache's mod_wsgi is **Python 3.8**; Sal chose to **stay on 3.8**. Test site at `/tools/wvara-site`, **no subdomain**.
+5. **Repos/branches:** two repos only; `site-rebuild` branch created; `deploy.sh` (main only) and new `deploy-site.sh` (site-rebuild only) refuse the wrong branch; new `wvara-site.wsgi`; on `main` and merged into `site-rebuild`.
+6. **Separate login cookie** (`SESSION_COOKIE_NAME` read from the keys file; live tool unaffected) on `site-rebuild`.
+7. **Server setup** for the test site, in a safe order (folder → venv → Apache lines → DB + keys → code), all recorded in `SERVER_SETUP.md`.
+8. Member login emails put **ON HOLD** (Sal) until the tool is dialed in.
+
+### Next session: pick the first rebuild piece
+Claude's suggested order (Sal has not chosen yet):
+1. **Seed the content repo:** clone `wvara-content` to the Mac, create `pages/`, `documents/`, `files/`, `images/`, and convert Eric's pages (Home, Repeaters, New Hams, Mission, About, Members) to Markdown with front matter. No app code.
+2. **Flask public site shell:** one base template with Eric's header/footer, `main.css`, `main.js`; port the Upcoming Events ticker (Groups.io ICS → cron → JSON cache; ICS URL in a `.keys` file); "Members" nav becomes "Members Login." Also decide how member pages (Bootstrap) and public pages (`main.css`) share one base.
+3. **Documents page:** the tiers above, files outside `static/`, tier re-checked on download, Pay Dues note for members who see less.
+Then: the sync script (staging → validate → swap, email on errors, read-only deploy key, cron) and the officers page.
+
+### Open items and reminders
+- **Confirm `wvara-content` is set to Private** before any board document (hospital access, DTMF codes) goes in. Consider transferring it to the WestValleyARA org later; repo access = board-level access.
+- **Tell Eric:** the Groups.io calendar ICS URL with its private tokens is committed in the PHP repo's `config.php`.
+- **Donate page:** `donate.php` uses the PayPal JS SDK plus a relay to Scott's Google Sheet; needs a talk with Scott/Eric before porting.
+- **Officer changes touch two places:** the content repo (public Officers page) and the Roles page (Dashboard Club Information card).
+- **Known minor:** page headings and `is_expiring_soon()` still use the UTC date (about 8 hours on Dec 31); fix during the rebuild.
+- **Stray file:** `__pycache__/wvara-site.cpython-310.pyc` on the Mac from Claude's compile check; harmless (git-ignored, never deployed); delete any time.
+- **Cosmetic:** the test-site comment line in the Apache conf is indented one space, no blank line before the live block.
+- **Still open from earlier:** Secretary's Records Manager login; self check-in kiosk; PayPal IPN (waiting on Eric); equipment inventory; DNS/registrar logins from Scott before cutover; Sal's and Eric's own records still have test details (section 8).
