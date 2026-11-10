@@ -15,6 +15,18 @@ REMOTE_DIR="/var/www/html/salmancuso/tools/wvara"
 LOCAL_DIR="/Users/smancuso/Documents/Personal/Sal/programming/wvara_membership"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 
+# ADDED 2026-11-09: the live tool only ever deploys from the main branch
+# (the site rebuild lives on site-rebuild and deploys with ./deploy-site.sh)
+BRANCH="$(git -C "$LOCAL_DIR" rev-parse --abbrev-ref HEAD)"
+if [[ "$BRANCH" != "main" ]]; then
+    echo "STOP: you're on branch '$BRANCH'."
+    echo "deploy.sh only deploys the LIVE tool from 'main'."
+    echo "  Live tool fix?   git switch main   then ./deploy.sh"
+    echo "  Test site?       ./deploy-site.sh  (from site-rebuild)"
+    echo "Nothing was changed."
+    exit 1
+fi
+
 echo "=========================================="
 echo " Deploying WVARA Membership"
 echo "   from: $LOCAL_DIR"
@@ -43,7 +55,9 @@ rsync -av \
     --exclude '.DS_Store' \
     --exclude '.git' \
     --exclude 'deploy.sh' \
+    --exclude 'deploy-site.sh' \
     "$LOCAL_DIR/" "$SERVER:$REMOTE_DIR/"
+# ADDED 2026-11-09: --exclude 'deploy-site.sh' (the test-site deploy script stays on the Mac)
 
 echo ""
 echo "Step 3 of 4: resetting permissions and Step 4 of 4: reloading Apache..."
