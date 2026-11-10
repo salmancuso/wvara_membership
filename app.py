@@ -68,6 +68,11 @@ APP_KEYS = load_keys()
 app = Flask(__name__)
 # CHANGED 2026-11-04: SECRET_KEY now comes from wvara.keys so sessions survive restarts
 app.config['SECRET_KEY'] = APP_KEYS['SECRET_KEY']
+# ADDED 2026-11-09: optional login cookie name from the keys file, so two copies of the app on one
+# domain (live /tools/wvara and test /tools/wvara-site) don't log each other out. If the line is
+# missing (the live tool's wvara.keys), Flask keeps its default cookie name 'session'.
+if APP_KEYS.get('SESSION_COOKIE_NAME'):
+    app.config['SESSION_COOKIE_NAME'] = APP_KEYS['SESSION_COOKIE_NAME']
 # CHANGED 2026-11-04: explicit path to the existing instance/wvara_membership.db (works on Mac and Linux)
 Path(app.instance_path).mkdir(parents=True, exist_ok=True)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + str(Path(app.instance_path) / 'wvara_membership.db')
