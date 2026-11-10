@@ -2,7 +2,7 @@
 
 *Started November 5, 2026 after a two-day build session with Claude. **Rewritten end of day November 6, 2026** after the roster load, admin notes, Activity Log, access levels, Club Information card and temporary passwords all went live. Earlier versions are in `archive/HANDOFF-*.md`.*
 
-*New session? Read this file, then ask Sal what's next. **Up next (section 8):** send members their login emails, push the latest commit, give the Secretary a Records Manager login, then the self check-in kiosk.*
+*New session? Read this file, then ask Sal what's next. **Up next (Sal, Nov 9): get the tool and the site rebuild dialed in first** (sections 14 and 15; design decisions settled Nov 9; no rebuild code yet; next decision is hosting). **Member login emails are ON HOLD** until the tool is ready (section 8, item 1). Content repo created: `https://github.com/salmancuso/wvara-content.git` (not cloned to the Mac yet).* *(CHANGED 2026-11-09: "push the latest commit" done; rebuild pointer added. Backup: `archive/HANDOFF-20261109-v2.md`.)*
 
 ---
 
@@ -103,7 +103,7 @@
 - `DUES_BY_TYPE = {'Individual': 15.00, 'Family': 25.00}`; Lifetime pays nothing.
 - `is_lifetime()` treats "Lifetime", "Life Member" and "Life" as lifetime.
 - `get_dues_status()` returns `lifetime` / `paid` / `grace` / `expired`. **This is the single source of truth** used everywhere. Family members follow their head.
-- **Grace period:** last year's dues count through the end of February (`GRACE_PERIOD_LAST_MONTH = 2`).
+- **Grace period:** last year's dues count through **January 31**; pay no later than February 1 (`GRACE_PERIOD_LAST_MONTH = 1`). *(CHANGED 2026-11-09: was end of February / `2`.)* The check uses `pacific_today()` in `models.py`, not the server's UTC date.
 - `is_expiring_soon()` in `app.py`: grace members, or paid members from November 1 on, **unless next year is already paid**.
 
 ### Pay Dues (PayPal, manual confirmation)
@@ -171,7 +171,7 @@
 - **Running a script on the server:** `cd /var/www/html/salmancuso/tools/wvara` then `sudo -u www-data venv/bin/python <script>.py` (dry run), then add `--yes`. Running as www-data keeps the database owner right.
 - **Copying a file down:** from a Mac Terminal (not inside ssh): `scp 'root@salmancuso.com:/var/www/html/salmancuso/tools/wvara/instance/<file>' /Users/smancuso/Documents/Personal/Sal/programming/wvara_membership/instance/`
 - **Logs:** `/var/log/apache2/error.log` (app lines tagged `WVARA:`).
-- **GitHub:** commit and push after each deployed change: `git add -A`, `git status` (check: **no `.db`, `.csv` or `.keys` files**), `git commit -m "..."`, `git push`. `.gitignore` blocks `*.db`, `*.csv`, `*.keys`, `instance/`, `venv/`, `__pycache__/`. HANDOFF.md and `archive/` are committed (private repo). Last confirmed push: Nov 6, end of day (everything live is on GitHub).
+- **GitHub:** commit and push after each deployed change: `git add -A`, `git status` (check: **no `.db`, `.csv` or `.keys` files**), `git commit -m "..."`, `git push`. `.gitignore` blocks `*.db`, `*.csv`, `*.keys`, `instance/`, `venv/`, `__pycache__/`. HANDOFF.md and `archive/` are committed (private repo). Last confirmed push: Nov 6, end of day (everything live is on GitHub). *(Nov 9: grace period change deployed; commit/push in progress with this HANDOFF update.)*
 - **SSH key setup: on hold** (Sal, Nov 6). The tool will eventually move to the club's server, deployed from GitHub. If picked up again: `ssh-keygen -t ed25519`, `ssh-copy-id root@salmancuso.com`, test with `ssh root@salmancuso.com`. The "post-quantum" SSH warning is harmless.
 
 ---
@@ -194,7 +194,7 @@
 
 ## 8. Open items and next steps
 
-1. **Send the login emails (next).** The private list is in the Mac's `instance/temp_passwords-*.csv` (138 rows: call sign, name, email, temporary password, active, login link). A draft email is in the Nov 6 chat: login page, call sign, temporary password, "the site will ask you to pick your own password." Watch for: **KK6HFV and KN6QZJ share one inbox** (separate emails, or both passwords clearly labeled); **RSOUTHERN** gets "username" instead of "call sign." Inactive members can't log in, so skip their emails unless they're being reactivated. Lost email later → `issue_temp_passwords.py --only CALLSIGN` on the server.
+1. **Send the login emails: ON HOLD (Sal, Nov 9).** Pinned until the tool and the site rebuild are dialed in; member communications go out later, all at once. *(CHANGED 2026-11-09: was "next".)* The private list is in the Mac's `instance/temp_passwords-*.csv` (138 rows: call sign, name, email, temporary password, active, login link). A draft email is in the Nov 6 chat: login page, call sign, temporary password, "the site will ask you to pick your own password." Watch for: **KK6HFV and KN6QZJ share one inbox** (separate emails, or both passwords clearly labeled); **RSOUTHERN** gets "username" instead of "call sign." Inactive members can't log in, so skip their emails unless they're being reactivated. Lost email later → `issue_temp_passwords.py --only CALLSIGN` on the server.
 2. ~~**Commit and push** the last round~~: done Nov 6, 2026 (Check-In removal, Check default, temporary passwords, Add Member fix, HANDOFF rewrite). GitHub matches the live site.
 3. **Give the Secretary a Records Manager login** on the live site (their member page → Access level).
 4. **Self check-in kiosk (idea; no code yet).** A laptop or iPad by the door. A Records Manager or higher sets up the event and taps "Start check-in"; members type their call sign or username and tap "I'm here."
@@ -309,7 +309,7 @@
 
 ### Two repos
 - **`wvara_membership`** (Sal only): Flask, templates, CSS/JS/images, sync script, ticker.
-- **`wvara-content`** (private, WestValleyARA org): `pages/*.md`, `documents/*.md` (one per document), `files/` (the documents), `images/`. Editors for now: **Sal and Eric only**, pushing straight to `main`. Purpose is an easy handoff to a future Webmaster/Secretary/President, not editing by every board member. **Repo access = board-level access** (board documents live there, and git history keeps old versions).
+- **`wvara-content`** **created by Sal Nov 9 at `https://github.com/salmancuso/wvara-content.git`** (Sal's personal account, not the WestValleyARA org; **not cloned to the Mac yet**; confirm it is **private** before any board document goes in; consider transferring it to the club org later for succession). *(CHANGED 2026-11-09: was planned as "private, WestValleyARA org".)* Layout: `pages/*.md`, `documents/*.md` (one per document), `files/` (the documents), `images/`. Editors for now: **Sal and Eric only**, pushing straight to `main`. Purpose is an easy handoff to a future Webmaster/Secretary/President, not editing by every board member. **Repo access = board-level access** (board documents live there, and git history keeps old versions).
 - Sync script (cron, ~5 min): fetch, pull into staging, validate front matter / layouts / referenced files / file types / sizes, then swap; last good copy stays live on errors and Sal gets an email. Raw HTML and scripts stripped from Markdown (login shares the domain). Read-only deploy key.
 
 ### Officers page
@@ -335,7 +335,22 @@
 - Members who see fewer documents get a short note ("Some club documents are available once your dues are current") with Pay Dues; no document names shown.
 - Access levels and roles stay separate. Records Manager and Club Administrator levels grant **no** extra document access; only System Administrator does (the override above).
 
-### Grace period change (decided Nov 9, not yet coded)
+### Grace period change (decided Nov 9; **DONE and deployed Nov 9**)
+
+- **What changed (Nov 9):** `models.py`: `GRACE_PERIOD_LAST_MONTH` 2 → 1; new `pacific_today()` (zoneinfo when available, same hand-written DST fallback as `to_pacific()`; models.py can't import app.py); `get_dues_status()` uses it. Templates: "end of February" / "through February" → "January 31" in `templates/dashboard.html` (2 lines) and `templates/admin/dashboard.html` (2 lines). Backups: `archive/models-20261109.py`, `archive/templates/dashboard-20261109.html`, `archive/templates/admin/dashboard-20261109.html`.
+- **Sandbox test:** fallback DST math matched zoneinfo every hour 2026 to 2028; 7 PM Pacific Jan 31 (Feb 1 UTC) reads as Jan 31; a 2026-only payer shows paid Dec 31, grace Jan 1 and Jan 31, expired Feb 1. No change today (111 paid, 2 lifetime, 27 expired). **Heads-up:** if nobody renews, 131 members flip to Expired on Feb 1, 2027 (family members follow heads). Sal checked locally, deployed, both dashboards load.
+- **Not changed (known):** page headings and `is_expiring_soon()` still use `date.today()` (UTC) for the current year, so on Dec 31 after 4 PM Pacific a heading can say next year while the status still uses this year (~8 hours a year). Fix during the rebuild.
+
+*Original planning notes, kept for the record:*
 - **New rule:** dues for the year must be paid **no later than February 1**. Grace is January only. Unpaid after that → not current.
 - Code today: `GRACE_PERIOD_LAST_MONTH = 2` in `models.py` (through the end of February). Change to `1`; update the `get_dues_status()` docstring ("January/February") and the HANDOFF line in section 4. This one setting drives dues badges, Expiring Soon, dashboard tiles, the members filters and document access.
 - `get_dues_status()` uses `date.today()`, which is **UTC on the server**, so grace would end at 4 PM Pacific on Jan 31. Use a Pacific date (`pacific_today()` from the archived check-in code) when making this change.
+
+### Hosting for the rebuild (decided Nov 9; ADDED 2026-11-09)
+- **Interserver is off the table for now** (Sal). Build and test the rebuilt site on **salmancuso.com**, then move it to a **new Linux server** once it checks out.
+- **Confirmed Nov 9:** salmancuso.com has Python **3.12.11** installed, but Apache's mod_wsgi is linked to **Python 3.8** (`ldd /usr/lib/apache2/modules/mod_wsgi.so` → `libpython3.8.so.1.0`). Apache can load only one mod_wsgi, so any mod_wsgi app there runs on 3.8. (Python 3.8 stopped getting security updates in October 2024.)
+- **DECIDED (Sal, Nov 9): Option 1. Stay on Python 3.8 under mod_wsgi**, same as the live tool ("keep coding with what we know works"). No Gunicorn, no 3.12 pivot. Venv built with `python3.8`. Revisit the Python version only when moving to the new server. *(ADDED 2026-11-09; backup `archive/HANDOFF-20261109-v5.md`.)*
+- **DECIDED (Sal, Nov 9): test site location.** URL **`https://salmancuso.com/tools/wvara-site`**; folder **`/var/www/html/salmancuso/tools/wvara-site`** with its own venv (`python3.8`), its own copy of the database and its own `.keys` file; Apache gets a second `WSGIDaemonProcess` + `WSGIScriptAlias` in the same block as the live tool (`salmancuso.com-le-ssl.conf`). **No subdomain** (not worth it; the site moves to a new server later). A handful of testers get the full URL from Sal. `/tools/wvara` stays live and untouched. *(ADDED 2026-11-09; backup `archive/HANDOFF-20261109-v6.md`.)*
+- **DECIDED (Sal, Nov 9): repos and branches.** Exactly **two repos**: `wvara_membership` (all code, Sal only) and `wvara-content` (board-editable content). The rebuild lives on a **`site-rebuild` branch** in `wvara_membership`; `main` stays the live tool. `deploy.sh` → `/tools/wvara` (main only); new `deploy-site.sh` → `/tools/wvara-site` (site-rebuild only). Each deploy script **refuses to run on the wrong branch**. At cutover, `site-rebuild` merges into `main`. Switch with `git switch site-rebuild` / `git switch main` (on the Mac). *(ADDED 2026-11-09; backup `archive/HANDOFF-20261109-v7.md`.)*
+- Options that were considered: (1) build the rebuild on 3.8 under mod_wsgi like the live tool; (2) switch Apache's mod_wsgi to 3.12, which forces the live tool onto a 3.12 venv at the same time; (3) run the rebuild on **3.12 under Gunicorn** (systemd service) with Apache reverse-proxying to it. The live tool stays on 3.8 untouched, and this matches how a fresh server would be set up.
+- **Rules for the rebuild:** run it **beside** the live tool (own folder, own copy of the database, own URL), never on top of `/tools/wvara`; keep code working on both 3.8 and 3.12; write down every server setup step (Apache, venv, systemd/Gunicorn, cron for the sync script, read-only deploy key for `wvara-content`) so the new server is a checklist.
