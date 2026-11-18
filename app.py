@@ -2058,6 +2058,687 @@ def member_map():
     return render_template('admin/map.html', **build_member_map_data(admin_view=False))
 
 
+# =====================================================================
+# ADDED 2026-11-18: Documents (V1). Club documents behind the login.
+# Each document is a file plus a .md "card" with the same name in instance/documents/, e.g.
+#   bylaws.pdf + bylaws.md, where bylaws.md starts with:
+#     ---
+#     title: WVARA Bylaws
+#     description: Current bylaws, adopted March 2024.
+#     file: bylaws.pdf
+#     category: Governance
+#     view: members
+#     ---
+# Text below the header is ignored in V1 (the V2 compile script will render it).
+# instance/ is never deployed or committed, so documents stay on the server only.
+# =====================================================================
+import mimetypes  # ADDED 2026-11-18
+from models import pacific_today  # ADDED 2026-11-18
+
+DOCUMENTS_DIR = Path(app.instance_path) / 'documents'
+DOCUMENTS_DIR.mkdir(parents=True, exist_ok=True)
+# CHANGED 2026-11-18 (v2): the documents themselves live in files/, the .md cards stay in documents/.
+# Keeps an uploaded .md document from being mistaken for a card (same layout as the future content repo).
+DOCUMENT_FILES_DIR = DOCUMENTS_DIR / 'files'
+DOCUMENT_FILES_DIR.mkdir(parents=True, exist_ok=True)
+
+# Who can see what. A missing or misspelled view: is treated as 'board' (fail closed).
+DOCUMENT_TIERS = ('members', 'current', 'board')
+DOCUMENT_TIER_LABELS = {
+    'members': 'All members',
+    'current': 'Dues current',
+    'board': 'Board',
+}
+DOCUMENT_FALLBACK_TIER = 'board'
+# CHANGED 2026-11-18 (v2): Sal's list. Shown on the management page, grouped like this.
+DOCUMENT_TYPE_GROUPS = [
+    ('PDF', ['.pdf']),
+    ('Images', ['.jpg', '.jpeg', '.png', '.gif', '.tif', '.tiff', '.heic']),
+    ('Word', ['.doc', '.docx']),
+    ('Excel', ['.xls', '.xlsx']),
+    ('PowerPoint', ['.ppt', '.pptx']),
+    ('Apple Pages, Numbers, Keynote', ['.pages', '.numbers', '.key']),
+    ('Text', ['.txt', '.csv', '.rtf', '.md']),
+    ('Windows scripts (always download)', ['.bat']),
+]
+DOCUMENT_ALLOWED_TYPES = {ext for _, exts in DOCUMENT_TYPE_GROUPS for ext in exts}
+DOCUMENT_INLINE_TYPES = {'.pdf', '.txt', '.md', '.png', '.jpg', '.jpeg', '.gif'}   # open in the browser; others download
+DOCUMENT_TEXT_TYPES = {'.txt', '.md'}   # always served as plain text, never as a web page
+# ADDED 2026-11-18 (v2): Bootstrap icon for each file type on the Documents pages
+DOCUMENT_ICONS = {
+    '.pdf': 'bi-file-earmark-pdf',
+    '.doc': 'bi-file-earmark-word', '.docx': 'bi-file-earmark-word', '.pages': 'bi-file-earmark-richtext',
+    '.rtf': 'bi-file-earmark-richtext',
+    '.xls': 'bi-file-earmark-excel', '.xlsx': 'bi-file-earmark-excel', '.numbers': 'bi-file-earmark-spreadsheet',
+    '.csv': 'bi-file-earmark-spreadsheet',
+    '.ppt': 'bi-file-earmark-ppt', '.pptx': 'bi-file-earmark-ppt', '.key': 'bi-file-earmark-slides',
+    '.jpg': 'bi-file-earmark-image', '.jpeg': 'bi-file-earmark-image', '.png': 'bi-file-earmark-image',
+    '.gif': 'bi-file-earmark-image', '.tif': 'bi-file-earmark-image', '.tiff': 'bi-file-earmark-image',
+    '.heic': 'bi-file-earmark-image',
+    '.txt': 'bi-file-earmark-text', '.md': 'bi-file-earmark-text',
+    '.bat': 'bi-file-earmark-code',
+}
+DOCUMENT_MAX_MB = 25
+DOCUMENT_MAX_BYTES = DOCUMENT_MAX_MB * 1024 * 1024
+# Whole upload request (file + form fields). Larger requests are refused before they're saved.
+app.config['MAX_CONTENT_LENGTH'] = DOCUMENT_MAX_BYTES + 1024 * 1024
+DOCUMENT_DEFAULT_CATEGORY = 'General'
+
+
+def read_document_header(md_path: Path) -> dict:
+    """Read the key: value lines between the two --- lines at the top of a .md file.
+    Hand-written so no new package is needed. Keys are lowercased; quotes around values are dropped."""
+    lines = md_path.read_text(encoding='utf-8', errors='replace').splitlines()
+    if not lines or lines[0].strip() != '---':
+        return {}
+    header = {}
+    for line in lines[1:]:
+        if line.strip() == '---':
+            return header
+        if not line.strip() or line.lstrip().startswith('#') or ':' not in line:
+            continue
+        key, value = line.split(':', 1)
+        value = value.strip()
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in ('"', "'"):
+            value = value[1:-1]
+        header[key.strip().lower()] = value
+    return {}   # no closing --- means the header is broken
+
+
+def load_documents():
+    """Read every .md card in the documents folder.
+    Returns (documents, problems). Each document is a dict with title, description, file, category,
+    view, view_ok. Problems are plain sentences for the System Administrator's Problems panel."""
+    documents, problems = [], []
+    cards_by_file = {}
+    named_by_a_card = set()   # every file any card mentions, even a rejected one (for the "no card" check)
+    for md_path in sorted(DOCUMENTS_DIR.glob('*.md')):
+        try:
+            header = read_document_header(md_path)
+        except OSError as exc:
+            problems.append(f'{md_path.name}: could not be read ({exc}).')
+            continue
+        if not header:
+            problems.append(f'{md_path.name}: no header found. It must start and end with a line of three dashes (---).')
+            continue
+        file_name = header.get('file', '').strip()
+        title = header.get('title', '').strip()
+        if not file_name:
+            problems.append(f'{md_path.name}: no "file:" line, so there is nothing to link to.')
+            continue
+        named_by_a_card.add(file_name)
+        # Only plain file names in the documents folder itself (no folders, no ../ tricks)
+        if file_name != Path(file_name).name or file_name.startswith('.'):
+            problems.append(f'{md_path.name}: "file: {file_name}" must be a plain file name in the documents folder.')
+            continue
+        suffix = Path(file_name).suffix.lower()
+        if suffix not in DOCUMENT_ALLOWED_TYPES:
+            problems.append(f'{md_path.name}: {file_name} is not an allowed file type '
+                            f'({", ".join(sorted(DOCUMENT_ALLOWED_TYPES))}).')
+            continue
+        if not (DOCUMENT_FILES_DIR / file_name).is_file():  # CHANGED 2026-11-18 (v2): files/ folder
+            problems.append(f'{md_path.name}: {file_name} is not in the documents/files folder.')
+            continue
+        view = header.get('view', '').strip().lower()
+        view_ok = view in DOCUMENT_TIERS
+        if not view_ok:
+            problems.append(f'{md_path.name}: "view: {view or "(blank)"}" is not members, current or board, '
+                            f'so it is treated as board until fixed.')
+            view = DOCUMENT_FALLBACK_TIER
+        if not title:
+            problems.append(f'{md_path.name}: no "title:" line, so the file name is shown instead.')
+            title = file_name
+        cards_by_file.setdefault(file_name, []).append(md_path.name)
+        documents.append({
+            'card': md_path.name,
+            'title': title,
+            'description': header.get('description', '').strip(),
+            'file': file_name,
+            'category': header.get('category', '').strip() or DOCUMENT_DEFAULT_CATEGORY,
+            'view': view,
+            'view_ok': view_ok,
+            'type': suffix.lstrip('.').upper(),
+            'inline': suffix in DOCUMENT_INLINE_TYPES,          # ADDED 2026-11-18 (v2)
+            'icon': DOCUMENT_ICONS.get(suffix, 'bi-file-earmark'),  # ADDED 2026-11-18 (v2)
+        })
+
+    # Two cards pointing at the same file: the strictest view wins for every card
+    for file_name, cards in cards_by_file.items():
+        if len(cards) > 1:
+            problems.append(f'{file_name} is listed by more than one card ({", ".join(cards)}); '
+                            'the strictest view applies to all of them.')
+            strictest = max((d['view'] for d in documents if d['file'] == file_name), key=DOCUMENT_TIERS.index)
+            for d in documents:
+                if d['file'] == file_name:
+                    d['view'] = strictest
+
+    # Files with no card are never shown or served; flag them so nothing is forgotten
+    for path in sorted(DOCUMENT_FILES_DIR.iterdir()):  # CHANGED 2026-11-18 (v2): files/ folder; .md files are documents here
+        if (path.is_file() and not path.name.startswith('.')
+                and path.name not in named_by_a_card):
+            problems.append(f'{path.name} has no .md card, so nobody can see it yet.')
+
+    documents.sort(key=lambda d: (d['category'].lower(), d['title'].lower()))
+    return documents, problems
+
+
+def holds_current_role(member) -> bool:
+    """True if the member holds any role on the Roles page that has started and not ended (any title)"""
+    today = pacific_today()
+    for r in member.role_history:
+        if (r.is_current and r.start_date and r.start_date <= today
+                and (r.end_date is None or r.end_date >= today)):
+            return True
+    return False
+
+
+def viewer_document_tiers(member) -> set:
+    """Which document tiers this member can see.
+    - System Administrator: everything
+    - inactive account: nothing
+    - members: any active member
+    - current: active and dues current (paid, grace, Lifetime, or a current family head)
+    - board:   active, dues current, and holds a current role"""
+    if not member or not member.is_active:
+        return set()
+    if admin_level_of(member) == 'system':
+        return set(DOCUMENT_TIERS)
+    tiers = {'members'}
+    if member.is_dues_current():
+        tiers.add('current')
+        if holds_current_role(member):
+            tiers.add('board')
+    return tiers
+
+
+def can_view_document(member, doc) -> bool:
+    return doc['view'] in viewer_document_tiers(member)
+
+
+@app.route('/documents')
+@login_required
+def documents_page():
+    """Club documents the viewer is allowed to see, grouped by category"""
+    viewer = current_viewer()
+    tiers = viewer_document_tiers(viewer)
+    all_docs, problems = load_documents()
+    visible = [d for d in all_docs if d['view'] in tiers]
+    hidden_count = len(all_docs) - len(visible)
+
+    groups = []
+    for d in visible:
+        if not groups or groups[-1]['category'] != d['category']:
+            groups.append({'category': d['category'], 'docs': []})
+        groups[-1]['docs'].append(d)
+
+    is_sysadmin = admin_level_of(viewer) == 'system'
+    return render_template(
+        'documents.html',
+        groups=groups,
+        show_dues_note=bool(hidden_count) and 'members' in tiers and 'current' not in tiers,
+        is_sysadmin=is_sysadmin,
+        problems=problems if is_sysadmin else [],
+        tier_labels=DOCUMENT_TIER_LABELS,
+        can_manage=document_manage_rights(viewer)['manage'],  # ADDED 2026-11-18 (v2)
+    )
+
+
+@app.route('/documents/file/<file_name>')
+@login_required
+def document_download(file_name):
+    """Serve one document, re-checking the viewer's access on every download.
+    Only files named by a valid .md card are ever served."""
+    viewer = current_viewer()
+    all_docs, _ = load_documents()
+    doc = next((d for d in all_docs if d['file'] == file_name), None)
+    if doc is None or not can_view_document(viewer, doc):
+        # Same answer for "doesn't exist" and "not allowed", so names can't be guessed
+        flash('That document is not available.', 'warning')
+        return redirect(url_for('documents_page'))
+
+    path = (DOCUMENT_FILES_DIR / doc['file']).resolve()  # CHANGED 2026-11-18 (v2): files/ folder
+    if path.parent != DOCUMENT_FILES_DIR.resolve() or not path.is_file():
+        flash('That document is not available.', 'warning')
+        return redirect(url_for('documents_page'))
+
+    log_admin_action('Downloaded document', None,
+                     f'{doc["title"]} ({doc["file"]}, view: {doc["view"]})')
+
+    suffix = path.suffix.lower()
+    # CHANGED 2026-11-18 (v2): .md as plain text too; .bat (and anything unknown) as a plain download
+    if suffix in DOCUMENT_TEXT_TYPES:
+        mimetype = 'text/plain'
+    elif suffix == '.bat':
+        mimetype = 'application/octet-stream'
+    else:
+        mimetype = mimetypes.guess_type(path.name)[0] or 'application/octet-stream'
+    response = send_file(path, mimetype=mimetype, as_attachment=suffix not in DOCUMENT_INLINE_TYPES,
+                         download_name=path.name, max_age=0)
+    response.headers['Cache-Control'] = 'private, no-store'
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    return response
+# ===================== END ADDED 2026-11-18: Documents =====================
+
+
+# =====================================================================
+# ADDED 2026-11-18 (v2): Document Management. Add, edit, delete and restore documents from the website.
+# The form writes the same file + .md card the Documents page already reads, so nothing else changes.
+#
+# Who can manage (only documents at levels they can see themselves):
+#   Board member (current role + dues current), no admin level: add, edit, delete
+#   Records Manager:      add, edit
+#   Club Administrator:   add, edit, delete
+#   System Administrator: add, edit, delete, restore (every level)
+#   Abilities stack: a Records Manager on the board gets the board member abilities.
+# Deletes are recoverable: the card and file move to documents/_deleted/<date>-<name>/.
+# A replaced file moves to documents/_old_versions/. Every action goes in the Activity Log.
+# =====================================================================
+import shutil  # ADDED 2026-11-18 (v2)
+from werkzeug.utils import secure_filename  # ADDED 2026-11-18 (v2)
+
+DOCUMENT_DELETED_DIR = DOCUMENTS_DIR / '_deleted'
+DOCUMENT_OLD_VERSIONS_DIR = DOCUMENTS_DIR / '_old_versions'
+DOCUMENT_DELETED_DIR.mkdir(parents=True, exist_ok=True)
+DOCUMENT_OLD_VERSIONS_DIR.mkdir(parents=True, exist_ok=True)
+
+DOCUMENT_CARD_KEYS = ('title', 'description', 'file', 'category', 'view')
+DOCUMENT_CARD_LABELS = [('title', 'Title'), ('description', 'Description'), ('category', 'Category'),
+                        ('view', 'Who can see it'), ('file', 'File')]
+DOCUMENT_FIELD_LIMITS = {'title': 150, 'description': 500, 'category': 60}
+
+
+def document_manage_rights(member) -> dict:
+    """What this member may do on the Manage Documents page, and at which levels ('tiers')"""
+    rights = {'manage': False, 'add': False, 'edit': False, 'delete': False, 'restore': False, 'tiers': set()}
+    if not member or not member.is_active:
+        return rights
+    is_system = admin_level_of(member) == 'system'
+    is_board = is_system or (member.is_dues_current() and holds_current_role(member))
+    rank = admin_rank(member)
+    if not (is_board or rank >= ADMIN_LEVELS['records']):
+        return rights
+    rights.update(manage=True, add=True, edit=True,
+                  delete=is_board or rank >= ADMIN_LEVELS['club'],
+                  restore=is_system,
+                  tiers=viewer_document_tiers(member))
+    return rights
+
+
+def document_rights_required(action):
+    """Decorator: the viewer needs this Manage Documents ability ('manage', 'add', 'edit', 'delete', 'restore')"""
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            if 'call_sign' not in session:
+                flash('Please log in to access this page.', 'warning')
+                return redirect(url_for('login'))
+            if not document_manage_rights(current_viewer())[action]:
+                flash("You don't have access to do that with documents.", 'warning')
+                return redirect(url_for('documents_page'))
+            return f(*args, **kwargs)
+        return decorated_function
+    return decorator
+
+
+def clean_card_value(value, limit=None) -> str:
+    """One tidy line: newlines and tabs become spaces, so nobody can sneak an extra header line in"""
+    text = ' '.join(str(value or '').split())
+    return text[:limit] if limit else text
+
+
+def read_card_body(card_path: Path) -> str:
+    """Any text below the header (kept as is when the form saves the card)"""
+    if not card_path.exists():
+        return ''
+    lines = card_path.read_text(encoding='utf-8', errors='replace').splitlines()
+    if not lines or lines[0].strip() != '---':
+        return ''
+    for i, line in enumerate(lines[1:], start=1):
+        if line.strip() == '---':
+            return '\n'.join(lines[i + 1:]).strip('\n')
+    return ''
+
+
+def write_document_card(card_path: Path, fields: dict, body: str = '') -> None:
+    """Write (or rewrite) a .md card. Written to a temporary file first, then swapped in."""
+    lines = ['---'] + [f'{key}: {clean_card_value(fields.get(key, ""))}' for key in DOCUMENT_CARD_KEYS] + ['---', '']
+    if body:
+        lines.append(body)
+        lines.append('')
+    tmp = card_path.with_name('.' + card_path.name + '.tmp')
+    tmp.write_text('\n'.join(lines), encoding='utf-8')
+    os.replace(tmp, card_path)
+
+
+def document_form_values(form, rights):
+    """Read and check the title / description / category / who-can-see-it fields. Returns (values, errors)."""
+    values = {
+        'title': clean_card_value(form.get('title'), DOCUMENT_FIELD_LIMITS['title']),
+        'description': clean_card_value(form.get('description'), DOCUMENT_FIELD_LIMITS['description']),
+        'category': clean_card_value(form.get('category'), DOCUMENT_FIELD_LIMITS['category']) or DOCUMENT_DEFAULT_CATEGORY,
+        'view': (form.get('view') or '').strip().lower(),
+    }
+    errors = []
+    if not values['title']:
+        errors.append('Please give the document a title.')
+    if values['view'] not in DOCUMENT_TIERS:
+        errors.append('Please choose who can see it.')
+    elif values['view'] not in rights['tiers']:
+        errors.append("You can't post documents at that level.")
+    return values, errors
+
+
+def check_document_upload(upload):
+    """Returns (stem, suffix, error). stem is a safe file name without the extension."""
+    if not upload or not upload.filename:
+        return None, None, 'Please choose a file to upload.'
+    suffix = Path(upload.filename).suffix.lower()
+    if suffix not in DOCUMENT_ALLOWED_TYPES:
+        return None, None, (f'{suffix or "Files with no extension"} files are not allowed. '
+                            f'Allowed: {", ".join(sorted(DOCUMENT_ALLOWED_TYPES))}.')
+    stem = secure_filename(Path(upload.filename).stem)[:80].strip('._-') or 'document'
+    return stem, suffix, None
+
+
+def save_upload_to_temp(upload):
+    """Save the upload under a hidden temporary name in files/ and check its size. Returns (temp_path, error)."""
+    tmp = DOCUMENT_FILES_DIR / ('.upload-' + secrets.token_hex(8))
+    upload.save(str(tmp))
+    size = tmp.stat().st_size
+    if size == 0:
+        tmp.unlink()
+        return None, 'That file is empty.'
+    if size > DOCUMENT_MAX_BYTES:
+        tmp.unlink()
+        return None, f'That file is larger than {DOCUMENT_MAX_MB} MB. Please choose a smaller file.'
+    return tmp, None
+
+
+def unique_document_stem(stem: str, suffix: str, need_card: bool = True) -> str:
+    """bylaws, bylaws-2, bylaws-3 ... so a new upload never overwrites another document's file or card"""
+    candidate, n = stem, 1
+    while ((DOCUMENT_FILES_DIR / f'{candidate}{suffix}').exists()
+           or (need_card and (DOCUMENTS_DIR / f'{candidate}.md').exists())):
+        n += 1
+        candidate = f'{stem}-{n}'
+    return candidate
+
+
+def document_stamp() -> str:
+    """Pacific date and time for _deleted and _old_versions names, e.g. 20261118-153012"""
+    return to_pacific(datetime.utcnow()).strftime('%Y%m%d-%H%M%S')
+
+
+def file_used_by_other_cards(file_name: str, card_name: str) -> bool:
+    docs, _ = load_documents()
+    return any(d['file'] == file_name and d['card'] != card_name for d in docs)
+
+
+def find_manageable_document(card_name, rights):
+    """The document with this card name, if the viewer may manage its level (else None)"""
+    docs, _ = load_documents()
+    doc = next((d for d in docs if d['card'] == card_name), None)
+    if doc is None or doc['view'] not in rights['tiers']:
+        return None
+    return doc
+
+
+def describe_card_changes(before: dict, after: dict) -> str:
+    """'Title: Old → New; Who can see it: All members → Board' for every card field that changed"""
+    parts = []
+    for key, label in DOCUMENT_CARD_LABELS:
+        old, new = before.get(key, ''), after.get(key, '')
+        if key == 'view':
+            old, new = DOCUMENT_TIER_LABELS.get(old, old), DOCUMENT_TIER_LABELS.get(new, new)
+        if log_value(old) != log_value(new):
+            parts.append(f'{label}: {log_value(old)} → {log_value(new)}')
+    return '; '.join(parts)
+
+
+def list_deleted_documents():
+    """Deleted documents waiting in _deleted/, newest first"""
+    items = []
+    for folder in sorted(DOCUMENT_DELETED_DIR.iterdir(), reverse=True):
+        if not folder.is_dir():
+            continue
+        cards = list(folder.glob('*.md'))
+        if len(cards) != 1:
+            continue
+        header = read_document_header(cards[0])
+        by_file = folder / 'deleted-by.txt'
+        deleted_by = by_file.read_text(encoding='utf-8').split('\n')[0].strip() if by_file.exists() else ''
+        try:
+            deleted_at = datetime.strptime(folder.name[:15], '%Y%m%d-%H%M%S').strftime('%b %d, %Y %I:%M %p')
+        except ValueError:
+            deleted_at = ''
+        items.append({
+            'folder': folder.name,
+            'card': cards[0].name,
+            'title': header.get('title') or cards[0].name,
+            'file': header.get('file', ''),
+            'view': header.get('view', ''),
+            'deleted_by': deleted_by,
+            'deleted_at': deleted_at,
+        })
+    return items
+
+
+def document_form_context(rights, mode, values, doc=None):
+    """Everything the New / Edit Document form needs"""
+    docs, _ = load_documents()
+    categories = sorted({d['category'] for d in docs if d['view'] in rights['tiers']}, key=str.lower)
+    return {
+        'mode': mode, 'values': values, 'doc': doc, 'categories': categories,
+        'tier_options': [t for t in DOCUMENT_TIERS if t in rights['tiers']],
+        'tier_labels': DOCUMENT_TIER_LABELS, 'type_groups': DOCUMENT_TYPE_GROUPS,
+        'accept': ','.join(sorted(DOCUMENT_ALLOWED_TYPES)), 'max_mb': DOCUMENT_MAX_MB,
+        'max_bytes': DOCUMENT_MAX_BYTES, 'limits': DOCUMENT_FIELD_LIMITS,
+    }
+
+
+@app.errorhandler(413)
+def request_too_large(error):
+    """ADDED 2026-11-18 (v2): an upload bigger than the limit"""
+    flash(f'That file is larger than {DOCUMENT_MAX_MB} MB. Please choose a smaller file.', 'danger')
+    return redirect(url_for('documents_manage') if 'call_sign' in session else url_for('login'))
+
+
+@app.route('/documents/manage')
+@document_rights_required('manage')
+def documents_manage():
+    """List of the documents this viewer may manage, with the limits and (System Administrators) Problems + Deleted"""
+    viewer = current_viewer()
+    rights = document_manage_rights(viewer)
+    docs, problems = load_documents()
+    is_sysadmin = admin_level_of(viewer) == 'system'
+    return render_template(
+        'documents_manage.html',
+        docs=[d for d in docs if d['view'] in rights['tiers']],
+        rights=rights,
+        tier_options=[t for t in DOCUMENT_TIERS if t in rights['tiers']],
+        tier_labels=DOCUMENT_TIER_LABELS,
+        type_groups=DOCUMENT_TYPE_GROUPS,
+        max_mb=DOCUMENT_MAX_MB,
+        problems=problems if is_sysadmin else [],
+        deleted=list_deleted_documents() if rights['restore'] else [],
+    )
+
+
+@app.route('/documents/manage/new', methods=['GET', 'POST'])
+@document_rights_required('add')
+def document_new():
+    """New Document: fill in the card and upload the file"""
+    viewer = current_viewer()
+    rights = document_manage_rights(viewer)
+    if request.method == 'GET':
+        values = {'title': '', 'description': '', 'category': '', 'view': 'members'}
+        return render_template('document_form.html', **document_form_context(rights, 'new', values))
+
+    values, errors = document_form_values(request.form, rights)
+    upload = request.files.get('file')
+    stem, suffix, upload_error = check_document_upload(upload)
+    if upload_error:
+        errors.append(upload_error)
+    tmp = None
+    if not errors:
+        tmp, size_error = save_upload_to_temp(upload)
+        if size_error:
+            errors.append(size_error)
+    if errors:
+        for e in errors:
+            flash(e, 'danger')
+        return render_template('document_form.html', **document_form_context(rights, 'new', values))
+
+    try:
+        stem = unique_document_stem(stem, suffix, need_card=True)
+        file_name = f'{stem}{suffix}'
+        os.replace(tmp, DOCUMENT_FILES_DIR / file_name)
+        card_name = f'{stem}.md'
+        write_document_card(DOCUMENTS_DIR / card_name, dict(values, file=file_name))
+    except OSError as exc:
+        app.logger.error(f'WVARA-SITE: document upload failed: {exc}')
+        if tmp is not None and tmp.exists():
+            tmp.unlink()
+        flash('The document could not be saved. Please try again, or tell the System Administrator.', 'danger')
+        return render_template('document_form.html', **document_form_context(rights, 'new', values))
+
+    log_admin_action('Document added', None,
+                     f'{values["title"]} ({card_name}): File: {file_name}; Category: {values["category"]}; '
+                     f'Who can see it: {DOCUMENT_TIER_LABELS[values["view"]]}')
+    flash(f'"{values["title"]}" was added.', 'success')
+    return redirect(url_for('documents_manage'))
+
+
+@app.route('/documents/manage/edit/<card_name>', methods=['GET', 'POST'])
+@document_rights_required('edit')
+def document_edit(card_name):
+    """Edit Document: change the card, and optionally replace the file (the old file is kept in _old_versions/)"""
+    viewer = current_viewer()
+    rights = document_manage_rights(viewer)
+    doc = find_manageable_document(card_name, rights)
+    if doc is None:
+        flash('That document is not available.', 'warning')
+        return redirect(url_for('documents_manage'))
+
+    if request.method == 'GET':
+        values = {k: doc[k] for k in ('title', 'description', 'category', 'view')}
+        return render_template('document_form.html', **document_form_context(rights, 'edit', values, doc))
+
+    values, errors = document_form_values(request.form, rights)
+    upload = request.files.get('file')
+    replacing = bool(upload and upload.filename)
+    tmp = None
+    if replacing:
+        stem, suffix, upload_error = check_document_upload(upload)
+        if upload_error:
+            errors.append(upload_error)
+        elif not errors:
+            tmp, size_error = save_upload_to_temp(upload)
+            if size_error:
+                errors.append(size_error)
+    if errors:
+        for e in errors:
+            flash(e, 'danger')
+        return render_template('document_form.html', **document_form_context(rights, 'edit', values, doc))
+
+    before = {k: doc[k] for k in DOCUMENT_CARD_KEYS}
+    file_name = doc['file']
+    kept_as = ''
+    card_path = DOCUMENTS_DIR / doc['card']
+    try:
+        if replacing:
+            old_path = DOCUMENT_FILES_DIR / doc['file']
+            if old_path.exists() and not file_used_by_other_cards(doc['file'], doc['card']):
+                kept_as = f'{document_stamp()}-{doc["file"]}'
+                shutil.move(str(old_path), str(DOCUMENT_OLD_VERSIONS_DIR / kept_as))
+            stem = unique_document_stem(stem, suffix, need_card=False)
+            file_name = f'{stem}{suffix}'
+            os.replace(tmp, DOCUMENT_FILES_DIR / file_name)
+        after = dict(values, file=file_name)
+        write_document_card(card_path, after, body=read_card_body(card_path))
+    except OSError as exc:
+        app.logger.error(f'WVARA-SITE: document edit failed: {exc}')
+        if tmp is not None and tmp.exists():
+            tmp.unlink()
+        flash('The changes could not be saved. Please try again, or tell the System Administrator.', 'danger')
+        return redirect(url_for('documents_manage'))
+
+    changes = describe_card_changes(before, after)
+    if replacing:
+        changes = '; '.join(p for p in [changes, 'New file uploaded'
+                                        + (f' (old file kept as _old_versions/{kept_as})' if kept_as else '')] if p)
+    if not changes:
+        flash('No changes to save.', 'info')
+        return redirect(url_for('documents_manage'))
+    log_admin_action('Document edited', None, f'{values["title"]} ({doc["card"]}): {changes}')
+    flash(f'"{values["title"]}" was updated.', 'success')
+    return redirect(url_for('documents_manage'))
+
+
+@app.route('/documents/manage/delete/<card_name>', methods=['POST'])
+@document_rights_required('delete')
+def document_delete(card_name):
+    """Delete Document: moves the card and file to _deleted/ (a System Administrator can restore it)"""
+    viewer = current_viewer()
+    rights = document_manage_rights(viewer)
+    doc = find_manageable_document(card_name, rights)
+    if doc is None:
+        flash('That document is not available.', 'warning')
+        return redirect(url_for('documents_manage'))
+    try:
+        folder = DOCUMENT_DELETED_DIR / f'{document_stamp()}-{Path(doc["card"]).stem}'
+        if folder.exists():
+            folder = folder.with_name(f'{folder.name}-{secrets.token_hex(2)}')
+        (folder / 'files').mkdir(parents=True)
+        file_path = DOCUMENT_FILES_DIR / doc['file']
+        if file_path.exists() and not file_used_by_other_cards(doc['file'], doc['card']):
+            shutil.move(str(file_path), str(folder / 'files' / doc['file']))
+        shutil.move(str(DOCUMENTS_DIR / doc['card']), str(folder / doc['card']))
+        (folder / 'deleted-by.txt').write_text(f'{viewer.call_sign}\n{datetime.utcnow().isoformat()} UTC\n',
+                                               encoding='utf-8')
+    except OSError as exc:
+        app.logger.error(f'WVARA-SITE: document delete failed: {exc}')
+        flash('The document could not be deleted. Please try again, or tell the System Administrator.', 'danger')
+        return redirect(url_for('documents_manage'))
+    log_admin_action('Document deleted', None,
+                     f'{doc["title"]} ({doc["card"]}): File: {doc["file"]}; '
+                     f'Who could see it: {DOCUMENT_TIER_LABELS[doc["view"]]}; kept in _deleted/{folder.name}')
+    flash(f'"{doc["title"]}" was deleted. A System Administrator can restore it if needed.', 'success')
+    return redirect(url_for('documents_manage'))
+
+
+@app.route('/documents/manage/restore/<folder_name>', methods=['POST'])
+@document_rights_required('restore')
+def document_restore(folder_name):
+    """Restore a deleted document (System Administrators only)"""
+    item = next((d for d in list_deleted_documents() if d['folder'] == folder_name), None)
+    if item is None:
+        flash('That deleted document was not found.', 'warning')
+        return redirect(url_for('documents_manage'))
+    folder = DOCUMENT_DELETED_DIR / item['folder']
+    card_target = DOCUMENTS_DIR / item['card']
+    saved_file = folder / 'files' / item['file'] if item['file'] else None
+    file_target = DOCUMENT_FILES_DIR / item['file'] if item['file'] else None
+    if card_target.exists() or (saved_file and saved_file.exists() and file_target.exists()):
+        flash(f'Another document already uses the name {item["card"]} or {item["file"]}. '
+              'Rename or delete that one first.', 'danger')
+        return redirect(url_for('documents_manage'))
+    try:
+        if saved_file and saved_file.exists():
+            shutil.move(str(saved_file), str(file_target))
+        shutil.move(str(folder / item['card']), str(card_target))
+        shutil.rmtree(folder)
+    except OSError as exc:
+        app.logger.error(f'WVARA-SITE: document restore failed: {exc}')
+        flash('The document could not be restored. Check the server folder by hand.', 'danger')
+        return redirect(url_for('documents_manage'))
+    log_admin_action('Document restored', None,
+                     f'{item["title"]} ({item["card"]}): File: {item["file"]}; from _deleted/{item["folder"]}')
+    flash(f'"{item["title"]}" was restored.', 'success')
+    return redirect(url_for('documents_manage'))
+# ============== END ADDED 2026-11-18 (v2): Document Management ==============
+
+
 # ADDED 2026-11-04: Member Map, ZIP code bubbles within 75 miles of the repeater site
 @app.route('/admin/map')
 @admin_required

@@ -2,6 +2,8 @@
 
 *Started November 5, 2026 after a two-day build session with Claude. **Rewritten end of day November 6, 2026** after the roster load, admin notes, Activity Log, access levels, Club Information card and temporary passwords all went live. Earlier versions are in `archive/HANDOFF-*.md`.*
 
+*(CHANGED 2026-11-18, later: **New session? Start with section 17.** Documents + Document Management are **deployed to the test site** (`/tools/wvara-site`), **not committed yet**. Backup before this edit: `archive/HANDOFF-20261118-v2.md`.)*
+
 *New session? Read this file (start with **section 16, end of day Nov 9**), then ask Sal what's next. **Work happens on the `site-rebuild` branch** (`git switch site-rebuild` on the Mac); this HANDOFF.md is newest on that branch. **Up next:** pick the first rebuild piece (section 16: Claude suggests 1. seed the content repo, 2. Flask site shell + ticker, 3. Documents page). **Member login emails are ON HOLD** (section 8, item 1).* *(CHANGED 2026-11-09 end of day. Backup: `archive/HANDOFF-20261109-v10.md`.)*
 
 ---
@@ -401,3 +403,44 @@ Then: the sync script (staging → validate → swap, email on errors, read-only
 - **Stray file:** `__pycache__/wvara-site.cpython-310.pyc` on the Mac from Claude's compile check; harmless (git-ignored, never deployed); delete any time.
 - **Cosmetic:** the test-site comment line in the Apache conf is indented one space, no blank line before the live block.
 - **Still open from earlier:** Secretary's Records Manager login; self check-in kiosk; PayPal IPN (waiting on Eric); equipment inventory; DNS/registrar logins from Scott before cutover; Sal's and Eric's own records still have test details (section 8).
+
+---
+
+## 17. Documents V1 (November 18, 2026; ADDED 2026-11-18)
+
+*Backup of this file before this section: `archive/HANDOFF-20261118.md`. Builds on section 15 (Members area and Documents).*
+
+### Decisions (Sal, Nov 18)
+- **No Jekyll or Hugo.** V2/V3: our own script compiles Markdown that a web admin pushes to the separate content repo and renders the Documents page and other public pages. Not now.
+- **V1:** Sal maintains documents by hand in one folder. **Option 1 chosen: every document gets its own `.md` card** (same name as the file) with a header: `title`, `description`, `file`, `category`, `view`. Text below the header is ignored in V1.
+
+### Built Nov 18 (branch `site-rebuild`; NOT deployed, NOT committed)
+- **Folder:** `instance/documents/` (created on startup). `deploy-site.sh` already skips `instance/`, git ignores it, server owner is `www-data`. No deploy script change.
+- **`app.py`** (one block after the Member Map route, marked `ADDED 2026-11-18`; backup `archive/app-20261118.py`): `DOCUMENTS_DIR`, `DOCUMENT_TIERS`, `DOCUMENT_ALLOWED_TYPES` (pdf, doc, docx, xls, xlsx, txt, png, jpg, jpeg), `read_document_header()` (hand-written; no new package), `load_documents()` → (documents, problems), `holds_current_role()` (any title, started, not ended, Pacific date), `viewer_document_tiers()`, `can_view_document()`. Routes: **`/documents`** (`documents_page`) and **`/documents/file/<file_name>`** (`document_download`).
+- **Rules:** inactive → nothing; System Administrator → everything; `members` any active; `current` dues current; `board` dues current + current role. Bad/missing `view:` → `board`. Two cards on one file → strictest view. Only files named by a valid card are served; `../`, `.md`, orphans and bad types refused with the same "not available" message. Tier re-checked on every download. Every download → Activity Log ("Downloaded document", member's call sign in the admin column). PDF/txt/images open inline; Word/Excel download; `Cache-Control: private, no-store`, `nosniff`.
+- **`templates/documents.html`** (new): grouped by category; dues note + Pay Dues for active members who aren't current; System Administrators also see each doc's tier badge, card name and a **Problems** panel (bad header, missing file, bad type, bad view, duplicate cards, files with no card).
+- **`templates/base.html`:** "Documents" added at the top of the Members menu (backup `archive/templates/base-20261118.html`).
+- **Sandbox test:** fake database, 11 member types, all list/download/tier checks and path attacks passed. Note: the sandbox can't read unchanged files in the Mac folder ("Resource deadlock avoided"); test with a fake database instead.
+- **Waiting on Sal:** Step 1 local check (restart app, drop `test.pdf` + `test.md` into `instance/documents/`, open `/documents`).
+
+### Being planned: admin Document Management (Sal's idea, Nov 18; no code yet)
+- Admins at **any** level (Records Manager, Club Administrator, System Administrator) get **Admin → Documents** (`/admin/documents`): **New Document** (form + file upload; writes the file and its `.md` card), **Edit Document** (change card fields, optionally replace the file), **Delete Document**. Members → Documents stays as is. One `.md` per document, so V1's page code and the future compile script keep working unchanged.
+- Claude's suggestions: secure file names, allowed types, size cap; soft delete into `instance/documents/_deleted/` (dated, recoverable); replaced files kept the same way; Activity Log entries with old → new detail; category pick list plus "new category."
+- **Open question for Sal:** can lower admin levels manage documents above what they can see (e.g., a Records Manager without a board role and `board` documents)? Claude suggests: manage only tiers you can see; System Administrator manages everything.
+- **Heads-up for V2:** once the content repo also feeds documents, pick one source of truth (the form or the repo), or they will overwrite each other.
+
+### Document Management: BUILT and deployed to the test site (Nov 18, later; ADDED 2026-11-18)
+*The "Being planned" notes above are superseded by this list.*
+- **Decided (Sal):** rights table below; 25 MB limit; allowed types shown on the management page; recoverable deletes; every action in the Activity Log; board members (not just admins) can manage documents.
+- **Rights** (`document_manage_rights()`): only documents at levels the person can see. Board member (current role + dues current, no admin level): add, edit, delete. Records Manager: add, edit. Club Administrator: add, edit, delete. System Administrator: all levels + **restore**. Abilities stack (a Records Manager on the board gets board abilities). A board member whose dues lapse loses access.
+- **Folders** (all under `instance/documents/`, created on startup): cards `*.md` in `documents/`; the files in **`files/`** (CHANGED from V1 so an uploaded `.md` document is never mistaken for a card); deletes in `_deleted/<YYYYMMDD-HHMMSS>-<name>/` (card + `files/` + `deleted-by.txt`); replaced files in `_old_versions/<stamp>-<file>`.
+- **Allowed types** (`DOCUMENT_TYPE_GROUPS`): PDF; images jpg/jpeg/png/gif/tif/tiff/heic; Word doc/docx; Excel xls/xlsx; PowerPoint ppt/pptx; Apple pages/numbers/key; text txt/csv/rtf/md; Windows `.bat` (always downloads, `application/octet-stream`). Inline in the browser: pdf, txt, md (as plain text), png, jpg, jpeg, gif. **25 MB** (`DOCUMENT_MAX_MB`; `MAX_CONTENT_LENGTH` = 26 MB, so this now applies to every POST in the app; the 413 handler flashes a friendly message). The form also checks size in the browser first.
+- **Routes:** `/documents/manage` (`documents_manage`), `/documents/manage/new`, `/documents/manage/edit/<card_name>` (optional file replace; body text under a hand-written card is kept), `/documents/manage/delete/<card_name>` (POST), `/documents/manage/restore/<folder_name>` (POST, System Administrator). Decorator `document_rights_required(action)`.
+- **Safety:** `secure_filename`; unique names (`bylaws`, `bylaws-2`...), never overwrites; card values squashed to one line (no header injection); temp upload saved hidden, size-checked, then swapped in; empty files refused; confirm text in a `data-confirm` attribute (safe with apostrophes).
+- **Activity Log actions:** "Document added", "Document edited" (old → new; notes the kept old file), "Document deleted", "Document restored", plus V1's "Downloaded document".
+- **Links:** Admin menu → **Documents**; a **Manage Documents** button on Members → Documents for anyone allowed (board members without admin access have no Admin menu).
+- **Files:** `app.py` (new block after the V1 block, plus small `CHANGED 2026-11-18 (v2)` edits in the V1 block; backup `archive/app-20261118-v2.py`); new `templates/documents_manage.html`, `templates/document_form.html`; edits in `templates/documents.html` (backup `archive/templates/documents-20261118.html`) and `templates/base.html` (backup `archive/templates/base-20261118-v2.html`).
+- **Sandbox test:** fake database, 9 member types; rights table, tier limits, uploads, collisions, size limit, bad/empty files, header injection, edit + replace, delete, restore and CSRF all passed. Python 3.8 check (vermin): only the existing `zoneinfo` line needs 3.9, and it already has a fallback.
+- **Deployed Nov 18** with `./deploy-site.sh` (test DB backup `/root/wvara-site-backups/wvara_membership-20261118-141709.db`). Confirmed: `/documents/manage` redirects to login when logged out; Sal sees Admin → Documents.
+- **Next:** Sal tries New / Edit / Delete on the test site; then **commit and push `site-rebuild`** (`git add -A`, check `git status` shows no `.db`/`.csv`/`.keys`, commit, push).
+- **Notes:** `deploy-site.sh` also copies `HANDOFF.md` to the server (same as `deploy.sh`; not web-reachable because `WSGIScriptAlias` owns the URL path). Claude mistakenly ran a `git diff` from the sandbox Nov 18; no `.git/index.lock` was left.

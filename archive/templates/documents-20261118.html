@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{# ADDED 2026-11-18: club documents behind the login (V1). Cards come from instance/documents/*.md #}
+
+{% block title %}Documents - WVARA Membership{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12">
+        <span class="wv-eyebrow" style="color: var(--wv-orange);">Members</span>
+        <h2 class="mb-4"><i class="bi bi-folder2-open"></i> Club Documents</h2>
+    </div>
+</div>
+
+{% if problems %}
+{# System Administrators only: cards that need fixing #}
+<div class="alert alert-warning">
+    <strong><i class="bi bi-tools"></i> Problems ({{ problems|length }})</strong>
+    <span class="small">Only System Administrators see this.</span>
+    <ul class="mb-0 mt-2 small">
+        {% for p in problems %}<li>{{ p }}</li>{% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+{% if show_dues_note %}
+<div class="alert alert-info d-flex flex-column flex-sm-row align-items-sm-center gap-2">
+    <div class="flex-grow-1">
+        <i class="bi bi-info-circle-fill"></i>
+        Some club documents are available once your dues are current.
+    </div>
+    {% if pay_dues %}
+    <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#payDuesModal">
+        <i class="bi bi-credit-card"></i> Pay Dues
+    </button>
+    {% endif %}
+</div>
+{% endif %}
+
+{% if groups %}
+    {% for group in groups %}
+    <div class="card mb-3">
+        <div class="card-header"><i class="bi bi-folder"></i> {{ group.category }}</div>
+        <div class="list-group list-group-flush">
+            {% for d in group.docs %}
+            <a href="{{ url_for('document_download', file_name=d.file) }}"
+               class="list-group-item list-group-item-action d-flex align-items-start gap-3 py-3"
+               {% if d.type in ('PDF', 'TXT', 'PNG', 'JPG', 'JPEG') %}target="_blank" rel="noopener"{% endif %}>
+                <i class="bi {% if d.type == 'PDF' %}bi-file-earmark-pdf{% elif d.type in ('DOC', 'DOCX') %}bi-file-earmark-word{% elif d.type in ('XLS', 'XLSX') %}bi-file-earmark-excel{% elif d.type in ('PNG', 'JPG', 'JPEG') %}bi-file-earmark-image{% else %}bi-file-earmark-text{% endif %} fs-3 flex-shrink-0"></i>
+                <div class="flex-grow-1">
+                    <div class="fw-semibold">{{ d.title }}</div>
+                    {% if d.description %}<div class="small text-muted">{{ d.description }}</div>{% endif %}
+                    <div class="small text-muted mt-1">
+                        <span class="badge bg-light text-dark border">{{ d.type }}</span>
+                        {% if is_sysadmin %}
+                        {# System Administrators see who each document is shown to, to check the cards #}
+                        <span class="badge {% if d.view == 'board' %}bg-danger{% elif d.view == 'current' %}bg-warning text-dark{% else %}bg-success{% endif %}">
+                            {{ tier_labels[d.view] }}{% if not d.view_ok %} (view: fix needed){% endif %}
+                        </span>
+                        <span class="text-muted">{{ d.card }}</span>
+                        {% endif %}
+                    </div>
+                </div>
+                <i class="bi bi-box-arrow-up-right text-muted flex-shrink-0 d-none d-sm-inline"></i>
+            </a>
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+{% else %}
+    <div class="card">
+        <div class="card-body text-muted">
+            <i class="bi bi-inbox"></i> No documents are posted yet. Check back soon.
+        </div>
+    </div>
+{% endif %}
+
+<p class="small text-muted mt-3">
+    These documents are for WVARA members. Please don't share them outside the club.
+</p>
+{% endblock %}

@@ -129,6 +129,8 @@
                                 <i class="bi bi-people-fill"></i> Members
                             </a>
                             <ul class="dropdown-menu">
+                                <!-- ADDED 2026-11-18: club documents -->
+                                <li><a class="dropdown-item" href="{{ url_for('documents_page') }}">Documents</a></li>
                                 <li><a class="dropdown-item" href="{{ url_for('member_reports') }}">Reports &amp; Directory</a></li>
                                 <li><a class="dropdown-item" href="{{ url_for('member_map') }}">Member Map</a></li>
                                 {% if pay_dues %}
@@ -156,6 +158,8 @@
                                     <li><a class="dropdown-item" href="{{ url_for('admin_reports') }}">Reports</a></li>
                                     <!-- ADDED 2026-11-04 -->
                                     <li><a class="dropdown-item" href="{{ url_for('admin_member_map') }}">Member Map</a></li>
+                                    <!-- ADDED 2026-11-18 (v2): manage club documents -->
+                                    <li><a class="dropdown-item" href="{{ url_for('documents_manage') }}">Documents</a></li>
                                 </ul>
                             </li>
                         {% endif %}

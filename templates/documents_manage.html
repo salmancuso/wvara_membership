@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{# ADDED 2026-11-18 (v2): Manage Documents (board members and admins). Lists only the levels the viewer can see. #}
+
+{% block title %}Manage Documents - WVARA Membership{% endblock %}
+
+{% block content %}
+<div class="row align-items-end mb-3">
+    <div class="col-md-8">
+        <span class="wv-eyebrow" style="color: var(--wv-orange);">Documents</span>
+        <h2 class="mb-0"><i class="bi bi-folder-plus"></i> Manage Documents</h2>
+    </div>
+    <div class="col-md-4 mt-3 mt-md-0 d-flex gap-2 justify-content-md-end">
+        <a href="{{ url_for('documents_page') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-eye"></i> Members view
+        </a>
+        {% if rights.add %}
+        <a href="{{ url_for('document_new') }}" class="btn btn-primary">
+            <i class="bi bi-plus-lg"></i> New Document
+        </a>
+        {% endif %}
+    </div>
+</div>
+
+{% if problems %}
+<div class="alert alert-warning">
+    <strong><i class="bi bi-tools"></i> Problems ({{ problems|length }})</strong>
+    <span class="small">Only System Administrators see this.</span>
+    <ul class="mb-0 mt-2 small">
+        {% for p in problems %}<li>{{ p }}</li>{% endfor %}
+    </ul>
+</div>
+{% endif %}
+
+<div class="row">
+    <div class="col-lg-8">
+        <div class="card mb-3">
+            <div class="card-header"><i class="bi bi-files"></i> Documents you can manage ({{ docs|length }})</div>
+            {% if docs %}
+            <div class="list-group list-group-flush">
+                {% for d in docs %}
+                <div class="list-group-item py-3">
+                    <div class="d-flex align-items-start gap-3">
+                        <i class="bi {{ d.icon }} fs-3 flex-shrink-0"></i>
+                        <div class="flex-grow-1" style="min-width: 0;">
+                            <a href="{{ url_for('document_download', file_name=d.file) }}" class="fw-semibold text-decoration-none"
+                               {% if d.inline %}target="_blank" rel="noopener"{% endif %}>{{ d.title }}</a>
+                            {% if d.description %}<div class="small text-muted">{{ d.description }}</div>{% endif %}
+                            <div class="small mt-1 d-flex flex-wrap gap-1 align-items-center">
+                                <span class="badge bg-light text-dark border">{{ d.category }}</span>
+                                <span class="badge {% if d.view == 'board' %}bg-danger{% elif d.view == 'current' %}bg-warning text-dark{% else %}bg-success{% endif %}">
+                                    {{ tier_labels[d.view] }}{% if not d.view_ok %} (view: fix needed){% endif %}
+                                </span>
+                                <span class="badge bg-light text-dark border">{{ d.type }}</span>
+                                <span class="text-muted text-break">{{ d.file }}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="d-flex gap-2 mt-2 justify-content-end">
+                        {% if rights.edit %}
+                        <a href="{{ url_for('document_edit', card_name=d.card) }}" class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-pencil"></i> Edit
+                        </a>
+                        {% endif %}
+                        {% if rights.delete %}
+                        <form method="POST" action="{{ url_for('document_delete', card_name=d.card) }}" class="d-inline"
+                              data-confirm="Delete &quot;{{ d.title }}&quot;? Members will no longer see it. A System Administrator can restore it."
+                              onsubmit="return confirm(this.dataset.confirm);">
+                            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i> Delete</button>
+                        </form>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="card-body text-muted">
+                <i class="bi bi-inbox"></i> No documents yet.
+                {% if rights.add %}<a href="{{ url_for('document_new') }}">Add the first one.</a>{% endif %}
+            </div>
+            {% endif %}
+        </div>
+
+        {% if rights.restore %}
+        <div class="card mb-3">
+            <div class="card-header"><i class="bi bi-arrow-counterclockwise"></i> Deleted documents ({{ deleted|length }})</div>
+            {% if deleted %}
+            <div class="list-group list-group-flush">
+                {% for item in deleted %}
+                <div class="list-group-item d-flex flex-column flex-sm-row align-items-sm-center gap-2">
+                    <div class="flex-grow-1">
+                        <div class="fw-semibold">{{ item.title }}</div>
+                        <div class="small text-muted">
+                            {{ item.file }}{% if item.deleted_at %} · deleted {{ item.deleted_at }}{% endif %}{% if item.deleted_by %} by {{ item.deleted_by }}{% endif %}
+                        </div>
+                    </div>
+                    <form method="POST" action="{{ url_for('document_restore', folder_name=item.folder) }}"
+                          data-confirm="Restore &quot;{{ item.title }}&quot;?"
+                          onsubmit="return confirm(this.dataset.confirm);">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-sm btn-outline-success"><i class="bi bi-arrow-counterclockwise"></i> Restore</button>
+                    </form>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="card-body small text-muted">Nothing has been deleted.</div>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+
+    <div class="col-lg-4">
+        <div class="card mb-3">
+            <div class="card-header"><i class="bi bi-info-circle"></i> Upload limits</div>
+            <div class="card-body small">
+                <p class="mb-2"><strong>Up to {{ max_mb }} MB</strong> per file.</p>
+                <p class="mb-1"><strong>Allowed file types:</strong></p>
+                <ul class="mb-0 ps-3">
+                    {% for label, exts in type_groups %}
+                    <li>{{ label }}: {{ exts|join(', ') }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+
+        <div class="card mb-3">
+            <div class="card-header"><i class="bi bi-shield-lock"></i> Your access</div>
+            <div class="card-body small">
+                <p class="mb-1">You can manage documents shown to:</p>
+                <ul class="mb-2 ps-3">
+                    {% for t in tier_options %}<li>{{ tier_labels[t] }}</li>{% endfor %}
+                </ul>
+                <p class="mb-0 text-muted">
+                    You can add and edit{% if rights.delete %} and delete{% endif %} documents{% if rights.restore %}, and restore deleted ones{% endif %}.
+                    Every change is recorded in the Activity Log.
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
